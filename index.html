@@ -286,11 +286,11 @@
       <table class="lt" id="endTabela"></table>
 
       <div class="kicker" style="margin-top: 22px;">Por que existiam versões diferentes</div>
-      <p style="font-size: 13.5px; margin-top: 4px;">Você jogou uma de várias versões visuais, sorteada
-      no momento em que começou. Elas mostram o mesmo mundo e as mesmas dez ações — o que muda é
-      quanto do seu estado aparece em número exato e como a cena é desenhada. Queremos saber se a
-      forma de apresentar altera a maneira como as pessoas interpretam a frase que receberam. Sua
-      versão não era melhor nem pior que as outras: nenhuma delas é a “certa”.</p>
+      <p style="font-size: 13.5px; margin-top: 4px;">Você jogou uma de cinco versões visuais, sorteada
+      no momento em que começou. Todas mostram o mesmo mundo, as mesmas dez ações e os mesmos
+      números — o que muda é como a cena é desenhada. Queremos saber se a forma de apresentar
+      altera a maneira como as pessoas interpretam a frase que receberam. Sua versão não era
+      melhor nem pior que as outras: nenhuma delas é a “certa”.</p>
 
       <div class="kicker" style="margin-top: 22px;">Enviar sua participação</div>
       <p style="font-size: 13.5px; margin-top: 4px;" id="endEnvioTexto"></p>
@@ -493,12 +493,13 @@ const CONFIG = {
 };
 const gsDisponivel = () => typeof google !== 'undefined' && google.script && google.script.run;
 
-/* ---------- fatores experimentais ----------
-   arte      = qual pele desenha o mundo   (ruído declarado)
-   legibilidade = quanto do estado vem em número exato (fator)
-   Ver docs/PRE-REGISTRO-INTERFACE.md.                        */
+/* ---------- fator experimental ----------
+   arte = qual pele desenha o mundo. Fator UNICO, 5 niveis.
+   O fator de legibilidade foi descartado em 07/08 (decisao 4): depois que os
+   8 valores passaram a aparecer nos tres niveis, o que sobrava de diferenca
+   era uma barra — nao manipulava nada. Ver docs/PRE-REGISTRO-INTERFACE.md.  */
 const ARTES = ['quarto', 'rua', 'mesa', 'corpo', 'relogio'];
-const LEGIBILIDADES = ['explicito', 'misto', 'diegetico'];
+const LEGIBILIDADE = 'unico';   // constante: registrada no pacote, nao sorteada
 
 const S = {
   pid: null, arte: null, legibilidade: null,
@@ -523,7 +524,7 @@ const reduzido = () =>
    Sorteio puro desequilibra muito com N pequeno. O backend devolve a célula
    menos preenchida; se não responder a tempo, cai no sorteio local.        */
 async function atribuirCelula() {
-  const local = () => ({ arte: rnd(ARTES), legibilidade: rnd(LEGIBILIDADES) });
+  const local = () => ({ arte: rnd(ARTES) });
   try {
     const url = CONFIG.endpoint + '?action=atribuir';
     const ctrl = new AbortController();
@@ -531,7 +532,7 @@ async function atribuirCelula() {
     const r = await fetch(url, { signal: ctrl.signal });
     clearTimeout(t);
     const j = await r.json();
-    if (j && ARTES.includes(j.arte) && LEGIBILIDADES.includes(j.legibilidade)) return j;
+    if (j && ARTES.includes(j.arte)) return { arte: j.arte };
   } catch (e) { /* offline, bloqueado ou lento: sorteio local */ }
   return local();
 }
@@ -579,7 +580,7 @@ $('btnPlay').addEventListener('click', async () => {
      ameaça a comparabilidade entre interfaces (Zhou & Fishbach, 2016).        */
   const celula = await atribuirCelula();
   S.arte = LW.skins[celula.arte] ? celula.arte : Object.keys(LW.skins)[0];
-  S.legibilidade = celula.legibilidade;
+  S.legibilidade = LEGIBILIDADE;
   registrarEvento('alocado');
   comecar();
 });
@@ -870,7 +871,6 @@ const RAIL_CSS = `
 #lwRail .lwv.pulsa { animation: lwPulsa .5s ease-out; }
 @keyframes lwPulsa { 0%,100% { transform: scale(1) } 40% { transform: scale(1.13) } }
 /* misto: sem rótulo. cênico: sem rótulo nem barra — o valor exato continua lá. */
-#lwRail.lw-diegetico .lwb { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #lwRail .lwd.mostra, #lwRail .lwv.pulsa { animation: none; }
   #lwRail .lwb i { transition: none; }
@@ -883,7 +883,7 @@ function montarRail(raiz) {
 
   const rail = document.createElement('aside');
   rail.id = 'lwRail';
-  rail.className = 'lw-' + S.legibilidade;
+  rail.className = 'lw-completo';
   rail.setAttribute('aria-label', 'como você está');
   rail.innerHTML = VITAIS.map(v => `
     <div class="lwv" data-v="${v.k}">
@@ -2114,7 +2114,7 @@ LW.skins.mesa = {
     this.escrever(this.el.frase, linhas, 19, 66 - (linhas.length - 1) * dy / 2, dy, fs);
 
     // a folha de números não existe quando o participante joga sem números
-    if (ctx.legibilidade === 'diegetico') this.el.ficha.style.display = 'none';
+    
 
     // as etiquetas: o nome vem do núcleo (a mesma palavra em toda arte) e a tarja
     // é cortada em cima da letra que ESTE aparelho desenhou, não de uma medida
@@ -3179,7 +3179,7 @@ LW.skins.quarto = {
     this.marcas = e.grade.querySelectorAll('line');
 
     // no nível diegético a cena é a única fonte: acendem-se as três medidas do corpo
-    if (ctx.legibilidade === 'diegetico') e.medidas.style.display = '';
+    
 
     this.objs = {
       rest: e.objCama, eat: e.objGel, study: e.objEstante, leisure_b: e.objTv,
@@ -3187,7 +3187,7 @@ LW.skins.quarto = {
       save: e.objCofre, withdraw: e.objMartelo,
     };
     this.marca = null;
-    this.legenda(ctx.legibilidade === 'diegetico'
+    this.legenda(false
       ? 'Seu quarto. Toque nas coisas — cada uma gasta um dia.'
       : 'Seu quarto. Toque nas coisas: cada uma gasta um dia.', '');
   },
@@ -4144,7 +4144,7 @@ LW.skins.relogio = {
       savings: [e.fillPote, '#F0E4A8'], skill: [e.pilha, '#E3A85C'],
       social: [e.lacos, '#9CCFE8'], other_welfare: [e.outro, '#9CCFE8'],
     };
-    var mudo = ctx.legibilidade === 'diegetico';
+    var mudo = false;
     for (var k in info.deltas) {
       if (!ALVO[k]) continue;
       var d = info.deltas[k];
