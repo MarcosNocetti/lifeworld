@@ -171,7 +171,7 @@
 
         <h4>O que você vai fazer</h4>
         <p>Receber um objetivo em uma frase e tomar 50 decisões em um mundo simulado (trabalhar, descansar, poupar…).
-        Ao final, mostramos como sua trajetória se compara à da IA e à do gabarito do estudo.</p>
+        Ao final, mostramos como a sua vida se compara à da IA e à do gabarito do estudo.</p>
         <p>O jogo existe em <strong>versões visuais diferentes</strong>, sorteadas entre os participantes.
         Você vai jogar uma delas; ao final explicamos por quê.</p>
 
@@ -189,7 +189,7 @@
 
         <h4>Finalidade e uso</h4>
         <p>Os dados serão usados de forma <strong>agregada e anonimizada</strong> em um Trabalho de Graduação e em eventuais
-        publicações acadêmicas dele derivadas. Exemplos de trajetórias podem ser exibidos publicamente — sempre sem
+        publicações acadêmicas dele derivadas. Exemplos de partidas podem ser exibidos publicamente — sempre sem
         qualquer informação que identifique quem jogou.</p>
 
         <h4>Voluntariedade e registro da participação</h4>
@@ -276,12 +276,14 @@
       <p id="endResumo" style="margin-top: 8px;"></p>
       <div class="scoreline" id="endScores"></div>
 
-      <div class="kicker" style="margin-top: 22px;">Como você se saiu na régua do estudo</div>
-      <p style="font-size: 13.5px; margin-top: 4px;">Sua trajetória foi pontuada pela mesma especificação “ouro” que julgou a IA — sem que você a conhecesse.</p>
+      <div class="kicker" style="margin-top: 22px;">Você, a IA e o gabarito</div>
+      <p style="font-size: 13.5px; margin-top: 4px;">A sua vida foi avaliada pelo mesmo critério que avaliou a IA — um critério que
+      nenhum de vocês dois conhecia enquanto jogava.</p>
       <div class="rank" id="endRank"></div>
 
-      <div class="kicker" style="margin-top: 22px;">Em qual leitura a sua vida se encaixa</div>
-      <p style="font-size: 13.5px; margin-top: 4px;">Cada leitura defensável da frase tem sua própria régua. Estas são as suas notas em cada uma:</p>
+      <div class="kicker" style="margin-top: 22px;">Que sentido você deu à frase</div>
+      <p style="font-size: 13.5px; margin-top: 4px;">A mesma frase aceita várias interpretações defensáveis, e cada uma valoriza
+      coisas diferentes. Veja como a sua vida se sai em cada uma delas:</p>
       <div class="leitura-res" id="endLeitura"></div>
       <table class="lt" id="endTabela"></table>
 
@@ -541,6 +543,16 @@ async function atribuirCelula() {
 function troca(sai, entra) {
   $(sai).classList.add('hide');
   $(entra).classList.remove('hide');
+  /* O palco do jogo e position:fixed cobrindo a tela toda; esconder so o
+     #scGame deixava ele (e o painel, a ficha e a dica) por cima do resultado.
+     Ao sair do jogo, o palco inteiro sai junto.                             */
+  if (sai === 'scGame') {
+    for (const id of ['lwPalco', 'lwGire']) {
+      const el = $(id);
+      if (el) el.remove();
+    }
+    S.rail = null; S.ficha = null; S.dica = null;
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1078,7 +1090,7 @@ function finalizar() {
     Você usou ${S.acoes.length} passos${S.invalidos ? `, sendo ${S.invalidos} em tentativas impossíveis` : ''}.`;
 
   $('endScores').innerHTML = `
-    <div class="sc you"><div class="l">sua nota</div><div class="v">${fmt(uGold, 3)}</div></div>
+    <div class="sc you"><div class="l">sua nota (de 0 a 1)</div><div class="v">${fmt(uGold, 3)}</div></div>
     <div class="sc"><div class="l">saúde no fim</div><div class="v">${fmt(f.health)}</div></div>
     <div class="sc"><div class="l">o que sobrou</div><div class="v">${fmt(f.cash + f.savings)}</div></div>`;
 
@@ -1103,10 +1115,10 @@ function finalizar() {
   if (notas.length) {
     $('endLeitura').innerHTML = `<div class="nm">${notas[0].nome}</div>
       <div class="ps">${notas[0].postura}</div>
-      <p style="font-size:13.5px;margin-top:8px;">É a leitura da frase que a sua vida serviu melhor.
-      Não existe leitura certa: são interpretações defensáveis da <em>mesma</em> frase — e é essa
+      <p style="font-size:13.5px;margin-top:8px;">É o sentido da frase que a sua vida serviu melhor.
+      Não existe sentido certo: são interpretações defensáveis da <em>mesma</em> frase — e é essa
       divergência entre pessoas que o estudo mede.</p>`;
-    $('endTabela').innerHTML = '<tr><th>leitura</th><th>postura</th><th style="text-align:right">sua nota</th></tr>' +
+    $('endTabela').innerHTML = '<tr><th>interpretação</th><th>postura</th><th style="text-align:right">sua nota</th></tr>' +
       notas.map(n => `<tr><td>${n.nome}</td><td style="color:var(--muted)">${n.postura}</td><td class="n">${fmt(n.u, 3)}</td></tr>`).join('');
   }
 
