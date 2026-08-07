@@ -2216,7 +2216,14 @@ LW.skins.quarto = {
   .sk-quarto .cena { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .sk-quarto text { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
 
-  .sk-quarto .obj { cursor: pointer; }
+  /* Só as coisas com que se pode fazer algo recebem o dedo. Parede, móveis, o
+     tampo da escrivaninha e o morador não roubam o toque de quem está do lado —
+     tocar errado registraria a decisão errada. */
+  .sk-quarto .cena { pointer-events: none; }
+  .sk-quarto .obj { pointer-events: auto; cursor: pointer; }
+  /* Área de toque: retângulo invisível maior que o desenho, para o dedo caber
+     mesmo na tela de 320px, sem inchar a arte. */
+  .sk-quarto .hit { fill: transparent; }
   .sk-quarto .obj:focus { outline: none; }
   .sk-quarto .art { transform-box: fill-box; transform-origin: bottom center;
     transition: transform .16s ease, filter .16s ease; }
@@ -2506,7 +2513,7 @@ LW.skins.quarto = {
       <foreignObject x="136" y="70" width="106" height="66">
         <div xmlns="http://www.w3.org/1999/xhtml" class="bilhete" data-el="frase"></div>
       </foreignObject>
-      <text x="137" y="150" font-size="9" fill="#8b7440"
+      <text x="133" y="150" font-size="10" fill="#8b7440"
         font-family="'Bradley Hand','Segoe Print','Comic Sans MS',cursive">foi isso que me pediram</text>
     </g>
 
@@ -2523,8 +2530,9 @@ LW.skins.quarto = {
       <circle data-el="hoje" cx="266" cy="120" r="5" fill="none" stroke="#c2513f" stroke-width="1.8"/>
     </g>
 
-    <!-- varal de fotos: quem você ainda tem -->
-    <g>
+    <!-- varal de fotos: quem você ainda tem.
+         Deslocado 10 para a direita para sair de baixo da área de toque do martelinho. -->
+    <g transform="translate(10,0)">
       <path d="M130,188 q56,15 112,-3" stroke="#8d7b62" stroke-width="1.2" fill="none"/>
       <g data-el="foto0" transform="rotate(-6 146 208)">
         <rect x="130" y="192" width="31" height="35" fill="#f2ece0"/>
@@ -2551,6 +2559,7 @@ LW.skins.quarto = {
 
     <!-- porta do vizinho -->
     <g class="obj" data-acao="help" data-el="objPorta">
+      <rect class="hit" x="256" y="168" width="119" height="265"/>
       <g class="art">
         <rect x="256" y="190" width="100" height="242" rx="2" fill="#3d2c26"/>
         <g class="portaViz">
@@ -2566,14 +2575,14 @@ LW.skins.quarto = {
           <path d="M303,330 q5.5,-8 11,0" fill="none" stroke="#a08e68" stroke-width="1.8"/></g>
       </g>
       <text class="verbo" x="306" y="184" text-anchor="middle">ajudar o vizinho</text>
-      <rect class="anel" x="254" y="188" width="104" height="246" rx="4" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="256" y="190" width="100" height="242" fill="none" pointer-events="all"/>
+      <rect class="anel" x="257" y="169" width="117" height="263" rx="4" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- prateleira: cofrinho (guardar) e martelinho (pegar) -->
     <rect x="2" y="246" width="132" height="7" rx="2" fill="#7a5537"/>
     <rect x="2" y="253" width="132" height="4" fill="#573a25"/>
     <g class="obj" data-acao="save" data-el="objCofre">
+      <rect class="hit" x="0" y="176" width="80" height="106"/>
       <g class="art">
         <ellipse cx="42" cy="224" rx="30" ry="21" fill="#e79ab0"/>
         <path d="M27,206 l-4,-14 l15,7 z" fill="#d9899f"/>
@@ -2594,11 +2603,10 @@ LW.skins.quarto = {
           stroke-linecap="round" opacity=".65"/>
       </g>
       <text class="verbo" x="6" y="272">guardar 8</text>
-      <rect class="anel" x="2" y="180" width="76" height="98" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="4" y="182" width="72" height="94" fill="none" pointer-events="all"/>
+      <rect class="anel" x="1" y="177" width="78" height="104" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
     <g class="obj" data-acao="withdraw" data-el="objMartelo">
-      <rect class="hit" x="70" y="188" width="70" height="108" fill="transparent" pointer-events="all"/>
+      <rect class="hit" x="82" y="176" width="66" height="106"/>
       <g class="art">
         <g transform="rotate(14 104 226)">
           <rect x="100" y="212" width="7" height="34" rx="3" fill="#8a6a44"/>
@@ -2615,12 +2623,12 @@ LW.skins.quarto = {
           fill="none" stroke-linecap="round" opacity=".65"/>
       </g>
       <text class="verbo" x="86" y="272">pegar 8</text>
-      <rect class="anel" x="80" y="180" width="54" height="98" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="82" y="182" width="50" height="94" fill="none" pointer-events="all"/>
+      <rect class="anel" x="83" y="177" width="64" height="104" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- geladeira -->
     <g class="obj" data-acao="eat" data-el="objGel">
+      <rect class="hit" x="0" y="284" width="88" height="152"/>
       <g class="art">
         <rect x="6" y="300" width="80" height="132" rx="6" fill="#c6cbc7"/>
         <g class="gelPorta">
@@ -2636,12 +2644,12 @@ LW.skins.quarto = {
         </g>
       </g>
       <text class="verbo" x="8" y="294">comer</text>
-      <rect class="anel" x="4" y="298" width="84" height="136" rx="7" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="6" y="300" width="80" height="132" fill="none" pointer-events="all"/>
+      <rect class="anel" x="1" y="285" width="86" height="150" rx="7" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- estante: os livros que você já leu -->
     <g class="obj" data-acao="study" data-el="objEstante">
+      <rect class="hit" x="90" y="284" width="88" height="152"/>
       <g class="art">
         <rect x="92" y="304" width="82" height="128" rx="3" fill="#5e3f2a"/>
         <rect x="96" y="308" width="74" height="120" fill="#3e2718"/>
@@ -2666,12 +2674,12 @@ LW.skins.quarto = {
         <g class="pagina fx"><rect x="140" y="356" width="16" height="12" rx="1" fill="#f4ecd8"/></g>
       </g>
       <text class="verbo" x="94" y="298">estudar</text>
-      <rect class="anel" x="90" y="302" width="86" height="132" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="92" y="304" width="82" height="128" fill="none" pointer-events="all"/>
+      <rect class="anel" x="91" y="285" width="86" height="150" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- televisão -->
     <g class="obj" data-acao="leisure_b" data-el="objTv">
+      <rect class="hit" x="180" y="284" width="75" height="152"/>
       <g class="art">
         <rect x="184" y="396" width="70" height="36" rx="3" fill="#4f3826"/>
         <rect x="184" y="396" width="70" height="5" fill="#6b4a31"/>
@@ -2684,15 +2692,15 @@ LW.skins.quarto = {
         <circle cx="252" cy="384" r="2" fill="#7fe0a0"/>
         <rect x="194" y="406" width="20" height="8" rx="2" fill="#2b2f36"/>
         <circle cx="199" cy="410" r="1.6" fill="#d9704f"/>
-        <circle class="gosto" data-el="gostoB" cx="252" cy="330" r="7" fill="#ffca6a" opacity="0"/>
+        <circle class="gosto" data-el="gostoB" cx="246" cy="330" r="7" fill="#ffca6a" opacity="0"/>
       </g>
       <text class="verbo" x="186" y="326">assistir</text>
-      <rect class="anel" x="182" y="330" width="74" height="104" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="184" y="332" width="70" height="100" fill="none" pointer-events="all"/>
+      <rect class="anel" x="181" y="285" width="73" height="150" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- cama, com gato -->
     <g class="obj" data-acao="rest" data-el="objCama">
+      <rect class="hit" x="0" y="438" width="168" height="146"/>
       <g class="art">
         <rect x="2" y="440" width="18" height="126" rx="3" fill="#6b4a31"/>
         <rect x="4" y="444" width="14" height="60" rx="3" fill="#7d5738"/>
@@ -2722,15 +2730,14 @@ LW.skins.quarto = {
         <g class="fx zzz zzz3" transform="translate(107,452)"><text font-size="10" font-weight="700" fill="#e2e8ff">z</text></g>
       </g>
       <text class="verbo" x="24" y="578">dormir</text>
-      <rect class="anel" x="0" y="438" width="178" height="128" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="2" y="440" width="174" height="124" fill="none" pointer-events="all"/>
+      <rect class="anel" x="1" y="439" width="166" height="144" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- violão encostado -->
     <g class="obj" data-acao="leisure_a" data-el="objViolao">
-      <rect class="hit" x="170" y="418" width="56" height="140" fill="transparent" pointer-events="all"/>
+      <rect class="hit" x="170" y="438" width="67" height="140"/>
       <g class="art">
-        <g transform="rotate(11 196 540)">
+        <g transform="translate(0,12) rotate(11 196 540)">
           <rect x="192" y="436" width="8" height="52" rx="2" fill="#6b4a31"/>
           <rect x="189" y="426" width="14" height="12" rx="3" fill="#4f3626"/>
           <path d="M196,488 c-13,0 -19,8 -19,16 c0,6.5 4,10.5 8,12.5 c-5,3 -8,8 -8,14 c0,10 8,18 19,18 c11,0 19,-8 19,-18 c0,-6 -3,-11 -8,-14 c4,-2 8,-6 8,-12.5 c0,-8 -6,-16 -19,-16 z" fill="#c9904f"/>
@@ -2742,27 +2749,26 @@ LW.skins.quarto = {
             <line x1="197" y1="430" x2="197" y2="533"/><line x1="199" y1="430" x2="199" y2="533"/>
           </g>
         </g>
-        <circle class="gosto" data-el="gostoA" cx="216" cy="452" r="7" fill="#ffca6a" opacity="0"/>
-        <g class="fx nota" transform="translate(214,500)">
+        <circle class="gosto" data-el="gostoA" cx="212" cy="466" r="7" fill="#ffca6a" opacity="0"/>
+        <g class="fx nota" transform="translate(212,512)">
           <path d="M0,10 a4,3 0 1 0 6,0 v-14 l7,3 v-4 l-9,-4 z" fill="#ffe0a8"/></g>
-        <g class="fx nota nota2" transform="translate(224,492)">
+        <g class="fx nota nota2" transform="translate(220,504)">
           <path d="M0,7 a3,2.4 0 1 0 4.6,0 v-11 l5,2 v-3 l-7,-3 z" fill="#ffd08a"/></g>
-        <g class="fx nota nota3" transform="translate(210,486)">
+        <g class="fx nota nota3" transform="translate(208,498)">
           <path d="M0,6 a2.6,2 0 1 0 4,0 v-9 l4,1.6 v-2.6 l-6,-2.4 z" fill="#ffeec4"/></g>
       </g>
-      <text class="verbo" x="218" y="598">tocar</text>
-      <rect class="anel" x="172" y="420" width="56" height="160" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-      <rect x="174" y="422" width="52" height="156" fill="none" pointer-events="all"/>
+      <text class="verbo" x="178" y="440">tocar</text>
+      <rect class="anel" x="171" y="439" width="65" height="138" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
     <!-- escrivaninha: monitor, carteira e celular -->
     <g>
-      <path d="M212,496 L372,496 L372,506 L212,506 Z" fill="#8a5f3c"/>
-      <path d="M222,486 L362,486 L372,496 L212,496 Z" fill="#a0714a"/>
-      <rect x="212" y="506" width="160" height="5" fill="#674630"/>
-      <rect x="222" y="511" width="10" height="60" rx="2" fill="#674630"/>
+      <path d="M240,496 L372,496 L372,506 L240,506 Z" fill="#8a5f3c"/>
+      <path d="M248,486 L362,486 L372,496 L240,496 Z" fill="#a0714a"/>
+      <rect x="240" y="506" width="132" height="5" fill="#674630"/>
+      <rect x="248" y="511" width="10" height="60" rx="2" fill="#674630"/>
       <rect x="352" y="511" width="10" height="60" rx="2" fill="#674630"/>
-      <rect x="228" y="538" width="132" height="5" rx="2" fill="#5c3d29" opacity=".7"/>
+      <rect x="254" y="538" width="106" height="5" rx="2" fill="#5c3d29" opacity=".7"/>
       <rect x="262" y="548" width="54" height="8" rx="3" fill="#5a4a3c"/>
       <rect x="264" y="556" width="7" height="44" rx="2.5" fill="#4a3c30"/>
       <rect x="307" y="556" width="7" height="44" rx="2.5" fill="#4a3c30"/>
@@ -2770,8 +2776,29 @@ LW.skins.quarto = {
       <rect x="303" y="512" width="7" height="38" rx="2.5" fill="#4a3c30"/>
       <rect x="266" y="516" width="46" height="9" rx="3" fill="#5a4a3c"/>
 
-      <!-- carteira: o dinheiro do dia, do jeito que ele está -->
-      <g>
+      <!-- monitor: trabalhar -->
+      <g class="obj" data-acao="work" data-el="objMesa">
+        <rect class="hit" x="239" y="435" width="67" height="71"/>
+        <g class="art">
+          <path d="M250,486 l6,-42 l46,0 l4,42 z" fill="#39404f"/>
+          <path d="M256,446 l44,0 l3,37 l-50,0 z" fill="url(#qTela)" opacity=".8"/>
+          <path d="M256,446 l44,0 l3,37 l-50,0 z" fill="#0f1622" opacity=".32"/>
+          <rect x="259" y="452" width="30" height="2.6" fill="#d6eaff" opacity=".72"/>
+          <rect x="259" y="458" width="40" height="2.6" fill="#d6eaff" opacity=".5"/>
+          <rect x="259" y="464" width="22" height="2.6" fill="#d6eaff" opacity=".56"/>
+          <rect x="259" y="470" width="36" height="2.6" fill="#d6eaff" opacity=".4"/>
+          <path d="M249,484 l54,0 l3,7 l-60,0 z" fill="#59616f"/>
+          <g class="cedula fx" transform="translate(248,468)">
+            <rect x="0" y="0" width="22" height="12" rx="1.6" fill="#cfc46a" stroke="#a8983f" stroke-width="1"/>
+            <circle cx="11" cy="6" r="3" fill="#a8983f"/></g>
+        </g>
+        <text class="verbo" x="274" y="440" text-anchor="middle">trabalhar</text>
+        <rect class="anel" x="240" y="436" width="65" height="69" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
+      </g>
+
+      <!-- carteira: o dinheiro do dia, do jeito que ele está.
+           Fica na frente do monitor: assim as notas não somem atrás da tela. -->
+      <g transform="translate(34,6)">
         <rect x="212" y="486" width="42" height="8" rx="2" fill="#5c3526"/>
         <rect data-el="nota3" x="220" y="478" width="24" height="9" rx="1.5" fill="#c2b75f"/>
         <rect data-el="nota2" x="224" y="474" width="21" height="8" rx="1.5" fill="#dcd189"/>
@@ -2786,43 +2813,22 @@ LW.skins.quarto = {
         </g>
       </g>
 
-      <!-- monitor: trabalhar -->
-      <g class="obj" data-acao="work" data-el="objMesa">
-        <g class="art">
-          <path d="M250,486 l6,-42 l50,0 l4,42 z" fill="#39404f"/>
-          <path d="M256,446 l48,0 l3,37 l-54,0 z" fill="url(#qTela)" opacity=".8"/>
-          <path d="M256,446 l48,0 l3,37 l-54,0 z" fill="#0f1622" opacity=".32"/>
-          <rect x="259" y="452" width="30" height="2.6" fill="#d6eaff" opacity=".72"/>
-          <rect x="259" y="458" width="42" height="2.6" fill="#d6eaff" opacity=".5"/>
-          <rect x="259" y="464" width="22" height="2.6" fill="#d6eaff" opacity=".56"/>
-          <rect x="259" y="470" width="36" height="2.6" fill="#d6eaff" opacity=".4"/>
-          <path d="M246,484 l68,0 l4,7 l-76,0 z" fill="#59616f"/>
-          <g class="cedula fx" transform="translate(246,468)">
-            <rect x="0" y="0" width="22" height="12" rx="1.6" fill="#cfc46a" stroke="#a8983f" stroke-width="1"/>
-            <circle cx="11" cy="6" r="3" fill="#a8983f"/></g>
-        </g>
-        <text class="verbo" x="280" y="440" text-anchor="middle">trabalhar</text>
-        <rect class="anel" x="242" y="438" width="80" height="60" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-        <rect x="244" y="440" width="76" height="56" fill="none" pointer-events="all"/>
-      </g>
-
       <!-- celular: ligar pra alguém -->
       <g class="obj" data-acao="socialize" data-el="objCel">
-      <rect class="hit" x="308" y="444" width="70" height="108" fill="transparent" pointer-events="all"/>
+        <rect class="hit" x="308" y="435" width="67" height="105"/>
         <g class="art">
           <g transform="rotate(-14 342 484)">
             <rect x="332" y="466" width="21" height="34" rx="4" fill="#22252b"/>
             <rect x="334.5" y="470" width="16" height="25" rx="2" fill="#7fb2d9" opacity=".9"/>
             <circle cx="342.5" cy="497.5" r="1.6" fill="#4a5058"/>
           </g>
-          <g class="fala fx" transform="translate(318,410)">
+          <g class="fala fx" transform="translate(318,436)">
             <path d="M6,0 h34 a6,6 0 0 1 6,6 v15 a6,6 0 0 1 -6,6 h-22 l-9,8 l1.5,-8 h-4.5 a6,6 0 0 1 -6,-6 v-15 a6,6 0 0 1 6,-6 z" fill="#f6ecd8"/>
             <circle cx="14" cy="13.5" r="2.6" fill="#8a7a62"/><circle cx="23" cy="13.5" r="2.6" fill="#8a7a62"/>
             <circle cx="32" cy="13.5" r="2.6" fill="#8a7a62"/></g>
         </g>
         <text class="verbo" x="322" y="522">ligar</text>
-        <rect class="anel" x="318" y="452" width="52" height="56" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
-        <rect x="320" y="454" width="48" height="52" fill="none" pointer-events="all"/>
+        <rect class="anel" x="309" y="436" width="65" height="103" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
       </g>
     </g>
 
