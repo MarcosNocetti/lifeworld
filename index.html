@@ -571,8 +571,10 @@ function comecar() {
 
   troca('scBrief', 'scGame');
   if (typeof skin.montar === 'function') skin.montar(raiz, S.ctx);
+  montarRail(raiz);
   ligarAcoes(raiz);
   renderNumeros(raiz);
+  renderRail(null);
   atualizarDisponibilidade(raiz);
   if (typeof skin.atualizar === 'function') skin.atualizar(S.estado, null, null, S.ctx);
 }
@@ -643,6 +645,7 @@ function jogar(acao) {
   const skin = S.skin;
   if (typeof skin.atualizar === 'function') skin.atualizar(S.estado, anterior, info, S.ctx);
   renderNumeros(S.ctx.raiz);
+  renderRail(anterior);
   if (typeof skin.consequencia === 'function') skin.consequencia(info, S.ctx);
   if (r.event && typeof skin.evento === 'function') {
     skin.evento(r.event === 'economic_crisis' ? 'crise' : 'gosto', S.ctx);
@@ -652,29 +655,117 @@ function jogar(acao) {
   atualizarDisponibilidade(S.ctx.raiz);
 }
 
+/* ---------- painel lateral de estado (igual nas 5 peles) ----------
+   Mora no nucleo, sobreposto a cena, para que toda pele tenha o MESMO
+   retorno de estado. Mostra os 8 valores exatos SEMPRE: o planejador da IA
+   enxerga os 8 a cada passo, e esconder do humano criaria assimetria de
+   informacao em vez de diferenca de interpretacao.
+   O que varia entre condicoes e a FORMA (custo de leitura), nunca a
+   informacao disponivel — cf. Johnson, Payne & Bettman (1988).
+   NUNCA mostra pontuacao: reagir a nota ensinaria a pessoa a pontuar.      */
+const RAIL_ICONES = {
+  health: '<path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/>',
+  energy: '<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>',
+  happiness: '<circle cx="12" cy="12" r="9"/><path d="M8 14c1.3 1.6 6.7 1.6 8 0"/><circle cx="9" cy="10" r=".9"/><circle cx="15" cy="10" r=".9"/>',
+  cash: '<rect x="3" y="7" width="18" height="11" rx="2"/><circle cx="12" cy="12.5" r="2.6"/>',
+  savings: '<path d="M5 12a6 5 0 0112 0v5H5z"/><path d="M9 7V5h4v2"/>',
+  skill: '<path d="M4 5h7v15H4z"/><path d="M13 5h7v15h-7z"/>',
+  social: '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="11" r="2.3"/><path d="M3 20c0-3.2 2.8-5 6-5s6 1.8 6 5"/>',
+  other_welfare: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+};
+const RAIL_CURTO = {
+  health: 'saúde', energy: 'energia', happiness: 'ânimo', cash: 'bolso',
+  savings: 'guardado', skill: 'prática', social: 'gente', other_welfare: 'ela/ele',
+};
+
+const RAIL_CSS = `
+/* a cena recua: o painel ocupa faixa propria em vez de cobrir a arte */
+#scGame[class*="sk-"] { right: 56px; }
+#lwRail { position: fixed; top: 0; right: 0; bottom: 0; width: 56px; z-index: 40;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 8px 5px calc(8px + env(safe-area-inset-bottom)) 5px;
+  background: #0d0a14; border-left: 1px solid rgba(255,255,255,.07);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; pointer-events: none; }
+#lwRail .lwv { position: relative; display: flex; flex-direction: column; align-items: center;
+  gap: 1px; padding: 3px 0; border-radius: 7px; }
+#lwRail svg { width: 17px; height: 17px; display: block; }
+#lwRail .lwq { font-size: 12.5px; font-weight: 700; color: #f0ecf6; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+#lwRail .lwr { font-size: 7.5px; letter-spacing: .04em; color: #9990ab; line-height: 1; }
+#lwRail .lwb { width: 30px; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.14);
+  overflow: hidden; margin-top: 1px; }
+#lwRail .lwb i { display: block; height: 100%; border-radius: 2px; transition: width .45s cubic-bezier(.2,.8,.3,1); }
+#lwRail .lwv.baixo .lwq { color: #ff6f66; }
+#lwRail .lwv.baixo svg { stroke: #ff6f66; }
+#lwRail .lwd { position: absolute; right: 46px; top: 4px; font-size: 11.5px; font-weight: 700;
+  white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0; }
+#lwRail .lwd.sobe { color: #46d39a; } #lwRail .lwd.desce { color: #ff6f66; }
+#lwRail .lwd.mostra { animation: lwFlut 1.25s ease-out forwards; }
+@keyframes lwFlut { 0% { opacity: 0; transform: translateY(6px) } 22% { opacity: 1; transform: translateY(0) }
+  75% { opacity: 1 } 100% { opacity: 0; transform: translateY(-9px) } }
+#lwRail .lwv.pulsa { animation: lwPulsa .5s ease-out; }
+@keyframes lwPulsa { 0%,100% { transform: scale(1) } 40% { transform: scale(1.13) } }
+/* misto: sem rótulo. cênico: sem rótulo nem barra — o valor exato continua lá. */
+#lwRail.lw-misto .lwr, #lwRail.lw-diegetico .lwr, #lwRail.lw-diegetico .lwb { display: none; }
+#lwRail.lw-diegetico .lwq { font-size: 11.5px; color: #cdc5db; }
+@media (prefers-reduced-motion: reduce) {
+  #lwRail .lwd.mostra, #lwRail .lwv.pulsa { animation: none; }
+  #lwRail .lwb i { transition: none; }
+}`;
+
+function montarRail(raiz) {
+  const st = document.createElement('style');
+  st.textContent = RAIL_CSS;
+  document.head.appendChild(st);
+
+  const rail = document.createElement('aside');
+  rail.id = 'lwRail';
+  rail.className = 'lw-' + S.legibilidade;
+  rail.setAttribute('aria-label', 'como você está');
+  rail.innerHTML = VITAIS.map(v => `
+    <div class="lwv" data-v="${v.k}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="${v.cor}" stroke-width="1.7"
+           stroke-linecap="round" stroke-linejoin="round">${RAIL_ICONES[v.k]}</svg>
+      <span class="lwq"></span>
+      <span class="lwr">${RAIL_CURTO[v.k]}</span>
+      <span class="lwb"><i style="background:${v.cor}"></i></span>
+      <span class="lwd"></span>
+    </div>`).join('');
+  (raiz.parentNode || raiz).appendChild(rail);   // irmao da cena, na faixa liberada
+  S.rail = rail;
+}
+
+function renderRail(anterior) {
+  if (!S.rail) return;
+  for (const v of VITAIS) {
+    const cel = S.rail.querySelector(`[data-v="${v.k}"]`);
+    const val = S.estado[v.k];
+    cel.querySelector('.lwq').textContent = fmt(val, 0);
+    cel.querySelector('.lwb i').style.width =
+      Math.max(0, Math.min(100, ((val - v.lo) / (v.hi - v.lo)) * 100)) + '%';
+
+    const critico = (v.k === 'health' && val <= 20) || (v.k === 'energy' && val < 15) || (v.k === 'cash' && val < -15);
+    cel.classList.toggle('baixo', critico);
+
+    if (!anterior) continue;
+    const d = val - anterior[v.k];
+    if (Math.abs(d) < 0.05) continue;
+    const bolha = cel.querySelector('.lwd');
+    bolha.textContent = (d > 0 ? '+' : '−') + fmt(Math.abs(d), 1);
+    bolha.className = 'lwd ' + (d > 0 ? 'sobe' : 'desce');
+    void bolha.offsetWidth;
+    bolha.classList.add('mostra');
+    if (Math.abs(d) >= 4) { cel.classList.remove('pulsa'); void cel.offsetWidth; cel.classList.add('pulsa'); }
+  }
+}
+
 /* ---------- o fator: quanto do estado vem em número exato ---------- */
 function renderNumeros(raiz) {
+  /* O estado agora mora no painel lateral (montarRail), igual nas 5 peles.
+     O slot da pele fica vazio para nao duplicar numero na tela — o contrato
+     mantem o slot porque peles podem querer reservar o espaco.            */
   const slot = raiz.querySelector('[data-slot="numeros"]');
-  if (!slot) return;
-  const nivel = S.legibilidade;
-  if (nivel === 'diegetico') { slot.innerHTML = ''; return; }
-
-  const chaves = nivel === 'misto'
-    ? ['health', 'energy', 'happiness', 'cash']
-    : VITAIS.map(v => v.k);
-
-  slot.className = 'lw-numeros lw-' + nivel;
-  slot.innerHTML = chaves.map(k => {
-    const v = VITAIS.find(x => x.k === k);
-    const val = S.estado[k];
-    const pct = Math.max(0, Math.min(100, ((val - v.lo) / (v.hi - v.lo)) * 100));
-    const perigo = (k === 'health' && val <= 20) || (k === 'energy' && val < 15) || (k === 'cash' && val < -15);
-    return `<div class="lw-n${perigo ? ' perigo' : ''}">
-      <span class="lw-rot">${v.nome}</span>
-      <span class="lw-val">${fmt(val)}</span>
-      ${nivel === 'explicito' ? `<span class="lw-bar"><i style="width:${pct}%;background:${v.cor}"></i></span>` : ''}
-    </div>`;
-  }).join('');
+  if (slot) { slot.innerHTML = ''; slot.className = 'lw-numeros vazio'; }
 }
 
 /* ---------- pacote e envio ---------- */
@@ -1080,7 +1171,7 @@ LW.skins.mesa = {
   .sk-mesa .obj:focus .anel, .sk-mesa .obj:focus-visible .anel { opacity: .95; }
   .sk-mesa .obj:hover .anel { opacity: .38; }
   .sk-mesa .obj.indisponivel { cursor: not-allowed; }
-  .sk-mesa .obj.indisponivel .anim { opacity: .34; filter: grayscale(.55); }
+  .sk-mesa .obj.indisponivel .anim { opacity: .4; filter: grayscale(.5); }
   .sk-mesa .obj.indisponivel:hover .anel { opacity: 0; }
 
   /* ---------- o que se mexe sozinho ---------- */
@@ -1095,7 +1186,7 @@ LW.skins.mesa = {
   @keyframes sk-mesa-gira { to { transform: rotate(360deg) } }
   @keyframes sk-mesa-folego { 0%, 100% { transform: rotate(-1.7deg) } 50% { transform: rotate(1.6deg) } }
   @keyframes sk-mesa-folego2 { 0%, 100% { transform: rotate(1.3deg) } 50% { transform: rotate(-2deg) } }
-  @keyframes sk-mesa-pisca { 0%, 88%, 100% { opacity: .9 } 92% { opacity: .34 } }
+  @keyframes sk-mesa-pisca { 0%, 88%, 100% { filter: brightness(1) } 92% { filter: brightness(.42) } }
   @keyframes sk-mesa-poeira { 0% { transform: translate(0, 0); opacity: 0 }
     30% { opacity: .5 } 100% { transform: translate(-16px, 40px); opacity: 0 } }
   .sk-mesa .fx { transform-box: fill-box; }
@@ -1126,11 +1217,11 @@ LW.skins.mesa = {
   .sk-mesa .dica { opacity: 0; transition: opacity .2s; }
   .sk-mesa .dica.ver { opacity: 1; }
   .sk-mesa .escuro { opacity: 0; transition: opacity .35s; pointer-events: none; }
-  .sk-mesa .escuro.ver { opacity: 1; }
+  .sk-mesa .escuro.ver { opacity: .6; }
 
   /* ---------- a folha de papel com os números (o núcleo preenche) ---------- */
-  .sk-mesa .ficha { position: absolute; left: 3.4%; right: 3.4%; bottom: 2.4%;
-    padding: calc(7*var(--u)) calc(9*var(--u)) calc(8*var(--u));
+  .sk-mesa .ficha { position: absolute; left: 3.4%; right: 3.4%; bottom: 2.2%;
+    pointer-events: none; padding: calc(6*var(--u)) calc(9*var(--u)) calc(6*var(--u));
     border-radius: calc(2*var(--u)); color: #40320f; transform: rotate(-.5deg);
     background: linear-gradient(158deg, #f7edd2 0%, #efe0bd 55%, #e2cfa6 100%);
     box-shadow: calc(-2*var(--u)) calc(3*var(--u)) calc(7*var(--u)) rgba(6,3,1,.62),
@@ -1140,14 +1231,17 @@ LW.skins.mesa = {
     top: calc(-3*var(--u)); height: calc(9*var(--u)); background: rgba(233,224,200,.5);
     transform: rotate(-1.4deg); }
   .sk-mesa .lw-explicito { display: grid; grid-template-columns: 1fr 1fr;
-    gap: calc(5*var(--u)) calc(11*var(--u)); }
-  .sk-mesa .lw-misto { display: flex; justify-content: space-between; gap: calc(4*var(--u)); }
-  .sk-mesa .lw-n { display: grid; grid-template-columns: 1fr auto; align-items: baseline;
-    gap: calc(3*var(--u)); }
-  .sk-mesa .lw-rot { font-size: calc(9*var(--u)); color: #7a6535; letter-spacing: .01em; }
+    gap: calc(3.5*var(--u)) calc(12*var(--u)); }
+  .sk-mesa .lw-misto { display: flex; justify-content: space-around; gap: calc(5*var(--u)); }
+  .sk-mesa .lw-n { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
+    gap: calc(4*var(--u)); }
+  .sk-mesa .lw-misto .lw-n { display: block; text-align: center; }
+  .sk-mesa .lw-misto .lw-rot { display: block; }
+  .sk-mesa .lw-rot { font-size: calc(8.6*var(--u)); color: #7a6535; letter-spacing: .01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sk-mesa .lw-val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: calc(12*var(--u)); }
   .sk-mesa .lw-n.perigo .lw-val { color: #9e2b20; }
-  .sk-mesa .lw-bar { grid-column: 1 / -1; display: block; height: calc(3*var(--u));
+  .sk-mesa .lw-bar { grid-column: 1 / -1; display: block; height: calc(2.6*var(--u));
     background: rgba(88,68,32,.2); border-radius: calc(2*var(--u)); overflow: hidden; }
   .sk-mesa .lw-bar i { display: block; height: 100%; border-radius: calc(2*var(--u)); }
 
@@ -1182,11 +1276,11 @@ LW.skins.mesa = {
       <stop offset=".22" stop-color="#f5b568" stop-opacity=".36"/>
       <stop offset=".48" stop-color="#c98a44" stop-opacity=".12"/>
       <stop offset="1" stop-color="#c98a44" stop-opacity="0"/></radialGradient>
-    <radialGradient id="m-vinheta" cx=".78" cy=".08" r="1">
+    <radialGradient id="m-vinheta" cx=".74" cy=".1" r="1.05">
       <stop offset="0" stop-color="#000" stop-opacity="0"/>
-      <stop offset=".42" stop-color="#000" stop-opacity=".1"/>
-      <stop offset=".72" stop-color="#000" stop-opacity=".46"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".84"/></radialGradient>
+      <stop offset=".5" stop-color="#000" stop-opacity=".07"/>
+      <stop offset=".8" stop-color="#000" stop-opacity=".33"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".72"/></radialGradient>
     <radialGradient id="m-velaLuz" cx=".5" cy=".5" r=".5">
       <stop offset="0" stop-color="#ffb257" stop-opacity=".5"/>
       <stop offset=".55" stop-color="#ff9f3c" stop-opacity=".12"/>
@@ -1259,14 +1353,16 @@ LW.skins.mesa = {
   <g transform="translate(150 268)" opacity=".3">
     <ellipse rx="31" ry="11" fill="none" stroke="#1e1108" stroke-width="3.2"/>
     <ellipse rx="31" ry="11" fill="#2c1b0f" opacity=".3"/></g>
-  <g transform="translate(232 616) rotate(-14)" opacity=".2">
-    <ellipse rx="18" ry="6.5" fill="none" stroke="#1e1108" stroke-width="2.2"/></g>
+  <g transform="translate(128 742) rotate(-9)" opacity=".22">
+    <ellipse rx="20" ry="7" fill="none" stroke="#1e1108" stroke-width="2.4"/></g>
+  <g stroke="#1c1008" fill="none" opacity=".3">
+    <path d="M232 756 l40 -9" stroke-width="1"/><path d="M240 766 l24 -5" stroke-width=".7"/></g>
 
   <!-- ===== o pano onde ficam as duas coisas de que eu talvez goste ===== -->
-  <path d="M250 432 q52 -10 126 -4 v292 q-64 10 -126 4 q-14 -146 0 -292z"
-        fill="url(#m-pano)" opacity=".62"/>
-  <path d="M250 432 q52 -10 126 -4" fill="none" stroke="#5b6377" stroke-width="1" opacity=".4"/>
-  <path d="M250 724 q56 10 126 4" fill="none" stroke="#5b6377" stroke-width="1" opacity=".3"/>
+  <path d="M256 434 q56 -12 122 -6 v294 q-62 12 -122 6 q10 -38 -4 -74 q-12 -36 6 -72 q10 -34 -2 -70
+           q-8 -34 0 -78z" fill="url(#m-pano)" opacity=".6"/>
+  <path d="M256 434 q56 -12 122 -6" fill="none" stroke="#5b6377" stroke-width="1" opacity=".38"/>
+  <path d="M256 722 q56 12 122 6" fill="none" stroke="#5b6377" stroke-width="1" opacity=".28"/>
 
   <!-- ===== a luz da luminária caindo na mesa ===== -->
   <rect data-el="feixe" width="375" height="812" fill="url(#m-feixe)"/>
@@ -1316,9 +1412,11 @@ LW.skins.mesa = {
     <path data-el="pingo" d="M192 108 q-5 12 -1 19 q6 -5 5 -19z" fill="#e9dcbc"/>
     <path data-el="ceraTopo" d="M192 94 a12 4.6 0 0 0 24 0 a12 4.6 0 0 0 -24 0z" fill="#fffbf0"/>
     <path data-el="pavio" d="M204 94 v-8" stroke="#3d2c19" stroke-width="1.8"/>
-    <g class="chama fx" data-el="chama">
-      <path d="M204 90 c 11 -9 7.5 -23 0 -31 c -7.5 8 -11 22 0 31z" fill="#ff9526" opacity=".95"/>
-      <path d="M204 88 c 5.4 -6 3.6 -13.5 0 -18 c -3.6 4.5 -5.4 12 0 18z" fill="#ffeeba"/>
+    <g data-el="chamaPos">
+      <g class="chama fx">
+        <path d="M204 90 c 11 -9 7.5 -23 0 -31 c -7.5 8 -11 22 0 31z" fill="#ff9526" opacity=".95"/>
+        <path d="M204 88 c 5.4 -6 3.6 -13.5 0 -18 c -3.6 4.5 -5.4 12 0 18z" fill="#ffeeba"/>
+      </g>
     </g>
   </g>
   <text class="lapis" data-el="dia" x="358" y="150" text-anchor="end" font-size="13.5"
@@ -1327,6 +1425,7 @@ LW.skins.mesa = {
   <!-- ===== a planta: como o corpo vai ===== -->
   <g transform="translate(2 12) rotate(-3 62 240)">
     <ellipse cx="58" cy="286" rx="44" ry="16" fill="#150c05" opacity=".55"/>
+    <g data-el="murcha" style="transform-box: fill-box; transform-origin: 50% 100%">
     <g class="folhas2 fx">
       <path class="fol" d="M55 246 C 22 238, 8 210, 16 188 C 39 194, 52 222, 55 246z" fill="#476f36"/>
       <path class="fol" d="M61 246 C 92 232, 106 206, 98 184 C 76 192, 63 220, 61 246z" fill="#3a622d"/>
@@ -1336,6 +1435,7 @@ LW.skins.mesa = {
       <path class="fol" d="M62 248 C 85 227, 90 196, 76 172 C 57 189, 52 224, 62 248z" fill="#588840"/>
       <path class="fol" d="M58 248 C 54 214, 58 178, 57 156 C 64 178, 66 214, 62 248z" fill="#86b860"/>
       <path class="fol" d="M50 248 C 34 236, 24 218, 26 204 C 42 212, 50 232, 50 248z" fill="#7aa855"/>
+    </g>
     </g>
     <path data-el="folhaSeca" d="M52 246 C 28 252, 12 268, 12 278 C 32 277, 48 262, 52 246z"
           fill="#9e8138" opacity=".8"/>
@@ -1379,12 +1479,12 @@ LW.skins.mesa = {
 
   <!-- ===== O CRACHÁ — trabalhar ===== -->
   <g class="obj" data-acao="work">
-    <rect class="anel" x="20" y="296" width="92" height="172" rx="12"/>
-    <rect x="20" y="296" width="92" height="172" fill="none" pointer-events="all"/>
+    <rect class="anel" x="20" y="318" width="92" height="150" rx="12"/>
+    <rect x="20" y="318" width="92" height="150" fill="none" pointer-events="all"/>
     <g class="anim"><g transform="translate(14 -5)">
-      <path d="M34 306 C 16 328, 46 342, 30 362 C 20 376, 42 378, 40 392"
+      <path d="M48 388 C 18 384, 8 352, 26 336 C 46 320, 82 330, 78 352 C 75 368, 58 374, 52 386"
             stroke="#8a2f2f" stroke-width="8.5" fill="none" stroke-linecap="round" filter="url(#m-sombrinha)"/>
-      <path d="M34 306 C 16 328, 46 342, 30 362 C 20 376, 42 378, 40 392"
+      <path d="M48 388 C 18 384, 8 352, 26 336 C 46 320, 82 330, 78 352 C 75 368, 58 374, 52 386"
             stroke="#b04747" stroke-width="3" fill="none" opacity=".5"/>
       <g transform="rotate(10 48 424)" filter="url(#m-sombra)">
         <rect x="16" y="386" width="64" height="12" rx="4" fill="url(#m-metal)"/>
@@ -1480,12 +1580,18 @@ LW.skins.mesa = {
         <circle cx="54" cy="520" r="31" fill="#e8e0cf"/>
         <circle cx="54" cy="520" r="31" fill="none" stroke="#cbc1af" stroke-width="1"/>
         <g data-el="comida">
-          <path d="M33 524 a21 14 0 0 1 42 0 a21 9 0 0 1 -42 0z" fill="#e5c583"/>
-          <path d="M35 521 a19 11 0 0 1 38 0z" fill="#f5dcaa"/>
-          <circle cx="50" cy="509" r="9.5" fill="#fbf6e8"/>
-          <circle cx="50" cy="509" r="4.6" fill="#f0b23c"/>
-          <path d="M65 505 c 8 -6 17 -4 19 2 c -7 6 -15 6 -19 -2z" fill="#588840"/>
-          <path d="M30 506 c -8 -5 -14 -3 -15 2 c 7 5 12 5 15 -2z" fill="#6d9c4c"/>
+          <ellipse cx="54" cy="528" rx="24" ry="10" fill="#b98d45" opacity=".35"/>
+          <path d="M32 525 a22 15 0 0 1 44 0 a22 10 0 0 1 -44 0z" fill="#d9a95c"/>
+          <path d="M34 522 a20 12 0 0 1 40 0z" fill="#f2ce8b"/>
+          <path d="M32 525 a22 15 0 0 1 44 0" fill="none" stroke="#a97c38" stroke-width="1.1" opacity=".7"/>
+          <path d="M58 531 q13 -10 22 -1 q-5 11 -22 5z" fill="#8a5326"/>
+          <path d="M58 531 q13 -10 22 -1" fill="none" stroke="#5f3616" stroke-width="1.2"/>
+          <circle cx="46" cy="508" r="10" fill="#fdf8ea"/>
+          <circle cx="46" cy="508" r="10" fill="none" stroke="#e2d6bd" stroke-width="1"/>
+          <circle cx="46" cy="508" r="4.8" fill="#efa92c"/>
+          <path d="M66 502 c 9 -6 18 -4 20 2 c -8 6 -16 6 -20 -2z" fill="#4d7a34"/>
+          <path d="M66 502 c 9 -6 18 -4 20 2" fill="none" stroke="#335520" stroke-width=".9"/>
+          <path d="M28 504 c -9 -5 -15 -3 -16 2 c 8 5 13 5 16 -2z" fill="#5f9040"/>
         </g>
         <path d="M42 530 q11 5 24 0" stroke="#c9a45f" stroke-width="1.4" fill="none" opacity=".55"/>
       </g>
@@ -1599,9 +1705,9 @@ LW.skins.mesa = {
 
   <!-- ===== A CARTEIRA — pegar de volta (sacar) ===== -->
   <g class="obj" data-acao="withdraw">
-    <rect class="anel" x="0" y="590" width="152" height="100" rx="12"/>
-    <rect x="0" y="590" width="152" height="100" fill="none" pointer-events="all"/>
-    <g class="anim"><g data-el="carteira" transform="translate(76 640) scale(.78) translate(-77 -742)">
+    <rect class="anel" x="0" y="578" width="152" height="100" rx="12"/>
+    <rect x="0" y="578" width="152" height="100" fill="none" pointer-events="all"/>
+    <g class="anim"><g data-el="carteira" transform="translate(76 628) scale(.78) translate(-77 -742)">
       <g data-el="notas">
         <g transform="rotate(-12 86 700)"><rect x="38" y="684" width="90" height="42" rx="3" fill="url(#m-nota)"/>
           <rect x="38" y="684" width="90" height="42" rx="3" fill="none" stroke="#7c9a6d" stroke-width=".8"/></g>
@@ -1631,9 +1737,9 @@ LW.skins.mesa = {
 
   <!-- ===== O POTE — guardar (poupar) ===== -->
   <g class="obj" data-acao="save">
-    <rect class="anel" x="156" y="594" width="82" height="94" rx="12"/>
-    <rect x="156" y="594" width="82" height="94" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(196 640) scale(.88) translate(-288 -733) rotate(2 288 740)">
+    <rect class="anel" x="156" y="582" width="82" height="94" rx="12"/>
+    <rect x="156" y="582" width="82" height="94" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(196 628) scale(.88) translate(-288 -733) rotate(2 288 740)">
       <ellipse cx="288" cy="778" rx="44" ry="14" fill="#0f0803" opacity=".55"/>
       <g filter="url(#m-sombra)">
         <path d="M252 704 h72 v58 a36 13 0 0 1 -72 0z" fill="url(#m-vidro)"/>
@@ -1660,9 +1766,9 @@ LW.skins.mesa = {
   </g>
 
   <!-- da carteira para o pote: o caminho do dinheiro guardado -->
-  <path d="M132 616 q22 -14 44 -4" stroke="#f6e2bd" stroke-width="1.2" fill="none"
+  <path d="M132 604 q22 -14 44 -4" stroke="#f6e2bd" stroke-width="1.2" fill="none"
         opacity=".26" stroke-dasharray="3 4"/>
-  <path d="M176 612 l-8 -2 l5 6z" fill="#f6e2bd" opacity=".26"/>
+  <path d="M176 600 l-8 -2 l5 6z" fill="#f6e2bd" opacity=".26"/>
 
   <!-- ===== a conta que chega ===== -->
   <g data-el="conta" opacity="0">
@@ -1707,8 +1813,8 @@ LW.skins.mesa = {
     this.el = {
       frase: q('frase'), dia: q('dia'), feixe: q('feixe'), frio: q('frio'),
       cera: q('cera'), ceraSombra: q('ceraSombra'), ceraTopo: q('ceraTopo'),
-      pingo: q('pingo'), pavio: q('pavio'), chama: q('chama'), halo: q('halo'),
-      folhas: [...raiz.querySelectorAll('.fol')], folhaSeca: q('folhaSeca'),
+      pingo: q('pingo'), pavio: q('pavio'), chamaPos: q('chamaPos'), halo: q('halo'),
+      folhas: [...raiz.querySelectorAll('.fol')], folhaSeca: q('folhaSeca'), murcha: q('murcha'),
       nivelCafe: q('nivelCafe'), cafeTopo: q('cafeTopo'), vapor: q('vapor'),
       disco: q('disco'), etiqueta: q('etiqueta'),
       notas: [...q('notas').children], dentroPote: [...q('dentroPote').children],
@@ -1722,8 +1828,12 @@ LW.skins.mesa = {
       svg: raiz.querySelector('svg'),
     };
 
-    // o pedido, escrito à mão no post-it
-    this.escrever(this.el.frase, this.quebrar(ctx.frase, 20, 4), 19, 42, 21, 16);
+    // o pedido, escrito à mão no post-it — a letra encolhe até a frase caber no papel
+    const linhas = this.quebrar(ctx.frase, 18, 5);
+    const maior = Math.max(...linhas.map(l => l.length));
+    const fs = Math.min(16.5, 130 / (maior * 0.48), linhas.length > 1 ? 54 / (linhas.length - 1) : 99);
+    const dy = fs * 1.33;
+    this.escrever(this.el.frase, linhas, 19, 66 - (linhas.length - 1) * dy / 2, dy, fs);
 
     // a folha de números não existe quando o participante joga sem números
     if (ctx.legibilidade === 'diegetico') this.el.ficha.style.display = 'none';
@@ -1736,6 +1846,12 @@ LW.skins.mesa = {
       g.addEventListener('pointerleave', some);
       g.addEventListener('focus', mostra);
       g.addEventListener('blur', some);
+      g.addEventListener('pointerdown', () => {
+        const a = g.dataset.acao;
+        if (this.ctx.REQS[a](this.ctx.estado)) return;   // dá: o núcleo cuida do resto
+        this.sussurro([this.VERBO[a] + ' — hoje não dá', this.ctx.REQ_TXT[a]], 2600);
+        this.anima(g.querySelector('.anim'), 'trava');
+      });
     });
   },
 
@@ -1803,10 +1919,12 @@ LW.skins.mesa = {
     const h = estado.health / 100;
     e.folhas.forEach(f => {
       f.setAttribute('class', 'fol suave');
-      f.style.opacity = String(0.28 + 0.72 * lim(h * 1.3));
-      f.style.filter = `saturate(${(0.18 + 1.1 * h).toFixed(2)}) brightness(${(0.5 + 0.62 * h).toFixed(2)})`;
+      f.style.opacity = String(0.24 + 0.76 * lim(h * 1.25));
+      f.style.filter = `saturate(${(0.12 + 1.15 * h).toFixed(2)}) brightness(${(0.46 + 0.66 * h).toFixed(2)})`
+        + ` hue-rotate(${(-(1 - h) * 26).toFixed(0)}deg)`;
     });
-    e.folhaSeca.style.opacity = String(lim(1.3 - h * 1.7));
+    e.murcha.style.transform = `scaleY(${(0.8 + 0.2 * h).toFixed(3)}) rotate(${((1 - h) * 3.2).toFixed(2)}deg)`;
+    e.folhaSeca.style.opacity = String(lim(1.35 - h * 1.8));
 
     /* energia — o café na caneca */
     const topo = Math.max(302, Math.min(386, 386 - (estado.energy / 100) * 84));
@@ -1858,7 +1976,7 @@ LW.skins.mesa = {
     set(e.ceraTopo, 'd', `M192 ${alto} a12 4.6 0 0 0 24 0 a12 4.6 0 0 0 -24 0z`);
     set(e.pingo, 'd', `M192 ${alto + 14} q-5 12 -1 19 q6 -5 5 -19z`);
     set(e.pavio, 'd', `M204 ${alto} v-8`);
-    set(e.chama, 'transform', `translate(0,${alto - 94})`);
+    set(e.chamaPos, 'transform', `translate(0,${alto - 94})`);
     set(e.halo, 'cy', alto + 14);
     e.dia.textContent = 'dia ' + ctx.passo + ' de ' + ctx.HORIZON;
 
@@ -1910,16 +2028,16 @@ LW.skins.mesa = {
     if (!info.invalid) {
       if (info.acao === 'work' && d.cash > 0) {
         const n = Math.max(1, Math.min(3, Math.round(d.cash / 5)));
-        for (let i = 0; i < n; i++) this.voar(72, 400, 40 + i * 12, 604 + i * 6, i * 110);
+        for (let i = 0; i < n; i++) this.voar(72, 400, 40 + i * 12, 592 + i * 6, i * 110);
       } else if (info.acao === 'save') {
-        this.voar(70, 606, 190, 626, 0);
+        this.voar(70, 594, 190, 614, 0);
       } else if (info.acao === 'withdraw') {
-        this.voar(190, 626, 70, 606, 0);
+        this.voar(190, 614, 70, 594, 0);
       }
     }
     if (info.acao === 'rest' && !info.invalid) {
       e.escuro.classList.add('ver');
-      setTimeout(() => e.escuro.classList.remove('ver'), 520);
+      setTimeout(() => e.escuro.classList.remove('ver'), 380);
     }
     if (info.avisos.length && navigator.vibrate) navigator.vibrate(18);
   },
@@ -1958,8 +2076,13 @@ LW.skins.mesa = {
       this.crise = true;
       e.conta.setAttribute('opacity', '1');
       if (!ctx.reduzido) {
+        e.contaAnim.style.transition = 'none';
         e.contaAnim.style.transform = 'translate(30px,-320px) rotate(-32deg) scale(1.4)';
-        setTimeout(() => { e.contaAnim.style.transform = 'translate(0,0)'; }, 40);
+        void e.contaAnim.getBoundingClientRect();
+        setTimeout(() => {
+          e.contaAnim.style.transition = '';
+          e.contaAnim.style.transform = 'translate(0px,0px)';
+        }, 30);
         this.anima(e.quadro, 'tremor');
         if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
       }
@@ -2121,7 +2244,7 @@ LW.skins.quarto = {
   .sk-quarto .frio { opacity: 0; transition: opacity 2.4s ease; pointer-events: none; }
   .sk-quarto.duro .frio { opacity: .3; }
   .sk-quarto .conta { opacity: 0; }
-  .sk-quarto.duro .conta { animation: sk-quarto-conta 1.4s ease-out forwards; }
+  .sk-quarto.duro .conta { opacity: 1; transform: translate(0,26px); animation: sk-quarto-conta 1.4s ease-out; }
   @keyframes sk-quarto-conta { 0% { opacity: 0; transform: translate(-24px,0) } 32% { opacity: 1 }
     100% { opacity: 1; transform: translate(0,26px) } }
 
@@ -2129,19 +2252,20 @@ LW.skins.quarto = {
   .sk-quarto .legenda2 { font-size: 10.5px; fill: #bda98f; }
   .sk-quarto .troca { animation: sk-quarto-leg .45s ease; }
   @keyframes sk-quarto-leg { 0% { opacity: 0; transform: translateY(6px) } 100% { opacity: 1 } }
-  .sk-quarto .medida { transform-box: fill-box; transition: transform .55s cubic-bezier(.3,.8,.3,1); }
+  .sk-quarto .medida { transition: y .55s cubic-bezier(.3,.8,.3,1), height .55s cubic-bezier(.3,.8,.3,1); }
   .sk-quarto .coracao { transform-box: fill-box; transform-origin: center;
     animation: sk-quarto-bate 2.7s ease-in-out infinite; }
   @keyframes sk-quarto-bate { 0%,72%,100% { transform: scale(1) } 80% { transform: scale(1.12) }
     88% { transform: scale(1.02) } }
 
-  .sk-quarto .hud { position: absolute; left: 0; right: 0; bottom: 0;
+  .sk-quarto .rodape { position: absolute; left: 0; right: 0; bottom: 0;
     padding: 0 12px max(12px, env(safe-area-inset-bottom)); pointer-events: none; }
   .sk-quarto .lw-numeros { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px;
-    padding: 7px 11px; border-radius: 12px; background: rgba(12,8,18,.66);
+    padding: 6px 10px; border-radius: 12px; background: rgba(12,8,18,.72);
     border: 1px solid rgba(255,224,178,.16); color: #d9cbb6; }
-  .sk-quarto .lw-numeros.lw-explicito { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 14px; }
-  .sk-quarto .lw-n { display: flex; align-items: center; gap: 5px; font-size: 10.5px; line-height: 1.25; }
+  .sk-quarto .lw-numeros.lw-explicito { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+  .sk-quarto .lw-n { display: flex; align-items: center; gap: 5px; font-size: 10.5px; line-height: 1.2; }
+  .sk-quarto .lw-explicito .lw-n { font-size: 10px; }
   .sk-quarto .lw-rot { color: #a8977f; }
   .sk-quarto .lw-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12.5px; color: #fbf2e4; }
   .sk-quarto .lw-n.perigo .lw-val { color: #ff9885; }
@@ -2183,14 +2307,14 @@ LW.skins.quarto = {
       <stop data-el="fx0" offset="0" stop-color="#a9c2f0" stop-opacity=".26"/>
       <stop data-el="fx1" offset="1" stop-color="#a9c2f0" stop-opacity="0"/>
     </linearGradient>
-    <radialGradient id="qVig" cx=".5" cy=".42" r=".76">
-      <stop offset=".46" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#05030b" stop-opacity=".68"/>
+    <radialGradient id="qVig" cx=".5" cy=".42" r=".8">
+      <stop offset=".54" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#05030b" stop-opacity=".5"/>
     </radialGradient>
     <linearGradient id="qFrente" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0a0710" stop-opacity="0"/>
-      <stop offset=".45" stop-color="#0a0710" stop-opacity=".72"/>
-      <stop offset="1" stop-color="#0a0710" stop-opacity=".95"/>
+      <stop offset=".42" stop-color="#0a0710" stop-opacity=".58"/>
+      <stop offset="1" stop-color="#0a0710" stop-opacity=".82"/>
     </linearGradient>
     <linearGradient id="qTela" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#a6dcff"/><stop offset="1" stop-color="#5b8fd0"/>
@@ -2227,10 +2351,10 @@ LW.skins.quarto = {
     </g>
 
     <!-- luminária -->
-    <line x1="188" y1="0" x2="188" y2="30" stroke="#1b1626" stroke-width="2.4"/>
-    <path d="M164,56 L212,56 L204,30 L172,30 Z" fill="#dcb98c"/>
-    <path d="M164,56 L212,56 L208,62 L168,62 Z" fill="#a9865f"/>
-    <circle cx="188" cy="64" r="4.6" fill="#fff2d2"/>
+    <line x1="188" y1="0" x2="188" y2="16" stroke="#1b1626" stroke-width="2.4"/>
+    <path d="M164,40 L212,40 L204,16 L172,16 Z" fill="#dcb98c"/>
+    <path d="M164,40 L212,40 L208,46 L168,46 Z" fill="#a9865f"/>
+    <circle cx="188" cy="47" r="4.4" fill="#fff2d2"/>
 
     <!-- janela: lá fora o tempo passa, e o vizinho vive -->
     <g>
@@ -2260,10 +2384,12 @@ LW.skins.quarto = {
       <!-- vaso no peitoril: o ânimo da casa -->
       <g data-el="planta">
         <path d="M88,172 l3,-15 l24,0 l3,15 z" fill="#a9603f"/>
-        <g class="folhas" data-el="folhas">
-          <path d="M103,157 q-15,-10 -17,-25 q15,4 17,25" fill="#5f9a6a"/>
-          <path d="M103,157 q15,-12 15,-27 q-14,6 -15,27" fill="#6fae78"/>
-          <path d="M103,157 q-2,-19 2,-29 q6,13 -2,29" fill="#528a5e"/>
+        <g data-el="folhas">
+          <g class="folhas">
+            <path d="M103,157 q-15,-10 -17,-25 q15,4 17,25" fill="#5f9a6a"/>
+            <path d="M103,157 q15,-12 15,-27 q-14,6 -15,27" fill="#6fae78"/>
+            <path d="M103,157 q-2,-19 2,-29 q6,13 -2,29" fill="#528a5e"/>
+          </g>
         </g>
       </g>
     </g>
@@ -2481,8 +2607,8 @@ LW.skins.quarto = {
         <path d="M60,474 h104 a5,5 0 0 1 5,5 v28 a4,4 0 0 1 -4,4 h-105 z" fill="#6f9a92"/>
         <path d="M60,488 q26,7 52,0 q26,-7 52,0" stroke="#5b8a83" stroke-width="1.8" fill="none"/>
         <path d="M60,500 q26,7 52,0 q26,-7 52,0" stroke="#5b8a83" stroke-width="1.4" fill="none" opacity=".6"/>
-        <ellipse cx="38" cy="476" rx="25" ry="11" fill="#f5f2e8"/>
-        <ellipse cx="38" cy="474" rx="21" ry="8" fill="#fffdf6" opacity=".7"/>
+        <ellipse cx="40" cy="486" rx="26" ry="9" fill="#f5f2e8"/>
+        <ellipse cx="40" cy="483" rx="21" ry="6" fill="#fffdf6" opacity=".7"/>
         <rect x="18" y="524" width="10" height="34" rx="2" fill="#5e3f2a"/>
         <rect x="154" y="524" width="10" height="34" rx="2" fill="#5e3f2a"/>
         <g class="gato">
@@ -2528,7 +2654,7 @@ LW.skins.quarto = {
         <g class="fx nota nota3" transform="translate(210,486)">
           <path d="M0,6 a2.6,2 0 1 0 4,0 v-9 l4,1.6 v-2.6 l-6,-2.4 z" fill="#ffeec4"/></g>
       </g>
-      <text class="verbo" x="176" y="586">tocar</text>
+      <text class="verbo" x="218" y="598">tocar</text>
       <rect class="anel" x="172" y="420" width="56" height="160" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
       <rect x="174" y="422" width="52" height="156" fill="none" pointer-events="all"/>
     </g>
@@ -2605,9 +2731,9 @@ LW.skins.quarto = {
 
     <!-- tralha que só mora aqui -->
     <g opacity=".92">
-      <ellipse cx="180" cy="640" rx="142" ry="52" fill="#8c4b45" opacity=".5"/>
-      <ellipse cx="180" cy="640" rx="118" ry="42" fill="none" stroke="#cf9270" stroke-width="2.6" opacity=".4"/>
-      <ellipse cx="180" cy="640" rx="80" ry="27" fill="none" stroke="#cf9270" stroke-width="2" opacity=".3"/>
+      <ellipse cx="180" cy="628" rx="142" ry="50" fill="#8c4b45" opacity=".5"/>
+      <ellipse cx="180" cy="628" rx="118" ry="40" fill="none" stroke="#cf9270" stroke-width="2.6" opacity=".4"/>
+      <ellipse cx="180" cy="628" rx="80" ry="26" fill="none" stroke="#cf9270" stroke-width="2" opacity=".3"/>
       <path d="M46,600 q14,-3 20,2 q5,3 -1,6 q-11,3 -20,0 z" fill="#4f6b7a"/>
       <path d="M68,606 q14,-4 21,1 q5,3 -1,6 q-11,3 -20,0 z" fill="#43606f"/>
       <path d="M330,568 l40,0 l0,34 l-40,0 z" fill="#a5764a"/>
@@ -2621,7 +2747,7 @@ LW.skins.quarto = {
     </g>
 
     <!-- você -->
-    <g class="quem" data-el="quem" transform="translate(176,664)">
+    <g class="quem" data-el="quem" transform="translate(176,652)">
       <ellipse cx="0" cy="3" rx="25" ry="7" fill="#000" opacity=".32"/>
       <g class="corpo">
         <rect x="-13.5" y="-36" width="11" height="37" rx="4.5" fill="#3f4a68"/>
@@ -2660,6 +2786,7 @@ LW.skins.quarto = {
     </g>
 
     <!-- clima -->
+    <rect data-el="claro" x="0" y="0" width="375" height="812" fill="#bcd8f0" opacity="0" pointer-events="none"/>
     <rect class="frio" x="0" y="0" width="375" height="812" fill="#3f6ea8" style="mix-blend-mode:color" pointer-events="none"/>
     <rect class="escuro" data-el="ambiente" x="0" y="0" width="375" height="812" fill="#08081a" opacity="0" pointer-events="none"/>
     <rect class="banhoTv" x="0" y="0" width="375" height="812" fill="#6fa8e0" opacity="0" pointer-events="none"/>
@@ -2668,23 +2795,32 @@ LW.skins.quarto = {
 
   <!-- primeiro plano: o que aconteceu hoje -->
   <g pointer-events="none">
-    <rect x="0" y="660" width="375" height="152" fill="url(#qFrente)"/>
-    <text class="legenda" data-el="legenda" x="188" y="692" text-anchor="middle"></text>
-    <text class="legenda2" data-el="legenda2" x="188" y="708" text-anchor="middle"></text>
+    <rect x="0" y="632" width="375" height="180" fill="url(#qFrente)"/>
+    <text class="legenda" data-el="legenda" x="188" y="678" text-anchor="middle"></text>
+    <text class="legenda2" data-el="legenda2" x="188" y="694" text-anchor="middle"></text>
     <g data-el="medidas" style="display:none">
-      <g transform="translate(96,730)">
-        <path d="M14,25.4 C6.4,19.6 2,14.6 2,9.9 C2,5.7 5.2,3 8.6,3 C10.9,3 13,4.4 14,6.3 C15,4.4 17.1,3 19.4,3 C22.8,3 26,5.7 26,9.9 C26,14.6 21.6,19.6 14,25.4 Z" fill="#40222c"/>
-        <g clip-path="url(#qCor)"><rect class="medida" data-el="mSaude" x="0" y="0" width="28" height="28" fill="#e8556d"/></g>
+      <g transform="translate(96,726)">
+        <path d="M14,25.4 C6.4,19.6 2,14.6 2,9.9 C2,5.7 5.2,3 8.6,3 C10.9,3 13,4.4 14,6.3 C15,4.4 17.1,3 19.4,3 C22.8,3 26,5.7 26,9.9 C26,14.6 21.6,19.6 14,25.4 Z" fill="#5c3340"/>
+        <g clip-path="url(#qCor)">
+          <rect class="medida" data-el="mSaude" x="0" y="0" width="28" height="28" fill="#e8556d"/>
+          <rect class="medida" data-el="oSaude" x="0" y="0" width="28" height="1.8" fill="#ffd9e0" opacity=".85"/>
+        </g>
         <path class="coracao" d="M14,25.4 C6.4,19.6 2,14.6 2,9.9 C2,5.7 5.2,3 8.6,3 C10.9,3 13,4.4 14,6.3 C15,4.4 17.1,3 19.4,3 C22.8,3 26,5.7 26,9.9 C26,14.6 21.6,19.6 14,25.4 Z" fill="none" stroke="#ffb3c0" stroke-width="1.5"/>
       </g>
-      <g transform="translate(174,730)">
-        <polygon points="17.5,2 6.5,15.6 12.6,15.6 10.4,26.4 21.6,12.2 15.2,12.2" fill="#3d3520"/>
-        <g clip-path="url(#qRaio)"><rect class="medida" data-el="mEnergia" x="0" y="0" width="28" height="28" fill="#f0b93f"/></g>
+      <g transform="translate(174,726)">
+        <polygon points="17.5,2 6.5,15.6 12.6,15.6 10.4,26.4 21.6,12.2 15.2,12.2" fill="#5c4a24"/>
+        <g clip-path="url(#qRaio)">
+          <rect class="medida" data-el="mEnergia" x="0" y="0" width="28" height="28" fill="#f0b93f"/>
+          <rect class="medida" data-el="oEnergia" x="0" y="0" width="28" height="1.8" fill="#fff0c2" opacity=".85"/>
+        </g>
         <polygon points="17.5,2 6.5,15.6 12.6,15.6 10.4,26.4 21.6,12.2 15.2,12.2" fill="none" stroke="#ffe4a6" stroke-width="1.4"/>
       </g>
-      <g transform="translate(250,730)">
-        <circle cx="14" cy="14" r="12.2" fill="#2f3d38"/>
-        <g clip-path="url(#qRosto)"><rect class="medida" data-el="mAnimo" x="0" y="0" width="28" height="28" fill="#6fc9a8"/></g>
+      <g transform="translate(250,726)">
+        <circle cx="14" cy="14" r="12.2" fill="#35494a"/>
+        <g clip-path="url(#qRosto)">
+          <rect class="medida" data-el="mAnimo" x="0" y="0" width="28" height="28" fill="#6fc9a8"/>
+          <rect class="medida" data-el="oAnimo" x="0" y="0" width="28" height="1.8" fill="#d4f5e6" opacity=".85"/>
+        </g>
         <circle cx="14" cy="14" r="12.2" fill="none" stroke="#bcf0dc" stroke-width="1.4"/>
         <circle cx="10" cy="11" r="1.7" fill="#1d302a"/><circle cx="18" cy="11" r="1.7" fill="#1d302a"/>
         <path data-el="bocaM" d="M9,17 q5,4.4 10,0" stroke="#1d302a" stroke-width="1.7" fill="none" stroke-linecap="round"/>
@@ -2692,7 +2828,7 @@ LW.skins.quarto = {
     </g>
   </g>
   </svg>
-  <div class="hud"><div data-slot="numeros"></div></div>`,
+  <div class="rodape"><div data-slot="numeros"></div></div>`,
 
   /* ---------- montagem ---------- */
   montar(raiz, ctx) {
@@ -2700,10 +2836,10 @@ LW.skins.quarto = {
     const e = {};
     for (const k of ['frase', 'diaNum', 'grade', 'hoje', 'legenda', 'legenda2', 'quem', 'tronco',
       'cabecaG', 'rosto', 'pescoco', 'mao1', 'mao2', 'boca', 'olheiras', 'palpebras', 'bochecha1',
-      'bochecha2', 'braco1', 'braco2', 'cofreNivel', 'livros', 'foto0', 'foto1', 'foto2', 'vizLuz',
+      'bochecha2', 'braco1', 'braco2', 'cofreNivel', 'livros', 'foto0', 'foto1', 'foto2', 'vizLuz', 'claro',
       'nota1', 'nota2', 'nota3', 'divida', 'planta', 'folhas', 'ceu0', 'ceu1', 'ceu2', 'fx0', 'fx1',
       'astro', 'estrelas', 'ambiente', 'lampada', 'feixe', 'poca', 'medidas', 'mSaude', 'mEnergia',
-      'mAnimo', 'bocaM', 'tvLuz', 'gostoA', 'gostoB', 'objCama', 'objGel', 'objEstante', 'objTv',
+      'mAnimo', 'oSaude', 'oEnergia', 'oAnimo', 'bocaM', 'tvLuz', 'gostoA', 'gostoB', 'objCama', 'objGel', 'objEstante', 'objTv',
       'objViolao', 'objMesa', 'objCel', 'objPorta', 'objCofre', 'objMartelo']) e[k] = q(k);
     this.el = e;
     this.raiz = raiz;
@@ -2748,10 +2884,14 @@ LW.skins.quarto = {
 
     /* --- a luz do dia atravessa os 50 passos --- */
     const HORAS = [
-      { ceu: ['#20294c', '#6a5570', '#d99a70'], feixe: '#ffcf9e', op: .34, amb: '#2a1a34', ambOp: .22, lamp: .34, astro: [92, 88, 9, '#ffd9a0'], est: .5 },
-      { ceu: ['#3f6fb5', '#87b0d8', '#cfe0ea'], feixe: '#dbe8ff', op: .30, amb: '#1a2a44', ambOp: .00, lamp: .18, astro: [96, 62, 8, '#fff6dc'], est: 0 },
-      { ceu: ['#2c3b6e', '#8a5a7a', '#e08a55'], feixe: '#ffbe86', op: .30, amb: '#2c1830', ambOp: .16, lamp: .55, astro: [36, 96, 10, '#ffcf8a'], est: .1 },
-      { ceu: ['#060a1a', '#111634', '#232048'], feixe: '#8fa8e0', op: .07, amb: '#05061c', ambOp: .46, lamp: .90, astro: [88, 70, 7, '#e8f0ff'], est: 1 },
+      { ceu: ['#3d5a8f', '#c08a90', '#f0b070'], feixe: '#ffcf9e', op: .34, amb: '#2a1a34', ambOp: .16,
+        claro: '#f0c090', claroOp: .10, lamp: .34, astro: [92, 92, 9, '#ffd9a0'], est: .45 },
+      { ceu: ['#5a95d8', '#9dc4e8', '#dfeaf0'], feixe: '#dbe8ff', op: .32, amb: '#1a2a44', ambOp: 0,
+        claro: '#bcd8f0', claroOp: .15, lamp: .16, astro: [96, 60, 8, '#fff6dc'], est: 0 },
+      { ceu: ['#2f4a86', '#b06a78', '#f0a058'], feixe: '#ffbe86', op: .30, amb: '#2c1830', ambOp: .14,
+        claro: '#f0a860', claroOp: .09, lamp: .55, astro: [34, 98, 10, '#ffcf8a'], est: .12 },
+      { ceu: ['#060a1c', '#0e1430', '#221d46'], feixe: '#8fa8e0', op: .06, amb: '#05061c', ambOp: .46,
+        claro: '#8fa8e0', claroOp: 0, lamp: .92, astro: [88, 70, 7, '#e8f0ff'], est: 1 },
     ];
     const fase = Math.max(0, Math.min(1, estado.t / ctx.HORIZON)) * 3;
     const i0 = Math.min(2, Math.floor(fase)), k = fase - i0;
@@ -2763,6 +2903,8 @@ LW.skins.quarto = {
     e.fx0.setAttribute('stop-opacity', (A.op + (B.op - A.op) * k).toFixed(3));
     e.ambiente.setAttribute('fill', mist(A.amb, B.amb, k));
     e.ambiente.setAttribute('opacity', (A.ambOp + (B.ambOp - A.ambOp) * k).toFixed(3));
+    e.claro.setAttribute('fill', mist(A.claro, B.claro, k));
+    e.claro.setAttribute('opacity', (A.claroOp + (B.claroOp - A.claroOp) * k).toFixed(3));
     e.lampada.style.opacity = '';
     e.lampada.setAttribute('opacity', (A.lamp + (B.lamp - A.lamp) * k).toFixed(2));
     e.estrelas.setAttribute('opacity', (A.est + (B.est - A.est) * k).toFixed(2));
@@ -2831,8 +2973,14 @@ LW.skins.quarto = {
     e.bochecha2.setAttribute('opacity', (.15 + .4 * an).toFixed(2));
 
     /* --- as três medidas do corpo (só no nível sem números) --- */
-    const enche = (el, f) => el.setAttribute('transform', `translate(0 ${(28 * (1 - f)).toFixed(2)})`);
-    enche(e.mSaude, sa); enche(e.mEnergia, en); enche(e.mAnimo, an);
+    const enche = (el, onda, f) => {
+      const y = 28 * (1 - f);
+      el.setAttribute('y', y.toFixed(2));
+      el.setAttribute('height', (28 * f).toFixed(2));
+      onda.setAttribute('y', y.toFixed(2));
+      onda.setAttribute('opacity', f > .02 && f < .98 ? '.85' : '0');
+    };
+    enche(e.mSaude, e.oSaude, sa); enche(e.mEnergia, e.oEnergia, en); enche(e.mAnimo, e.oAnimo, an);
     e.bocaM.setAttribute('d', `M9,17 q5,${(4.4 * (Math.abs(alegria) < .04 ? .04 : alegria)).toFixed(2)} 10,0`);
 
     /* --- o lazer que você já descobriu que gosta --- */
@@ -2850,9 +2998,9 @@ LW.skins.quarto = {
       help: [300, 466, .82, '', 'sacola'],
       save: [74, 470, .8, '', 'guardar'],
       withdraw: [74, 470, .8, '', 'pegar'],
-      work: [292, 616, 1, 'sentado', 'grana'],
-      leisure_a: [196, 646, 1, 'sentado', 'nota'],
-      socialize: [322, 646, 1, '', 'fala'],
+      work: [292, 610, 1, 'sentado', 'grana'],
+      leisure_a: [196, 636, 1, 'sentado', 'nota'],
+      socialize: [322, 636, 1, '', 'fala'],
     };
     const FALA = {
       rest: 'Você apagou. O corpo agradeceu.',
@@ -3058,7 +3206,8 @@ LW.skins.relogio = {
   .sk-relogio .mostrador { position: relative; z-index: 3; flex: 1 1 auto; min-height: 190px;
     padding: 4px 0 0; }
   .sk-relogio .face { display: block; width: 100%; height: 100%; }
-  .sk-relogio.frio .mostrador { filter: saturate(.7) hue-rotate(-8deg); }
+  /* a crise esfria o que ainda não foi vivido; os dias já vividos guardam a cor deles */
+  .sk-relogio.frio .mostrador { filter: saturate(.88) brightness(.97); }
   .sk-relogio.completo .face { filter: drop-shadow(0 0 20px rgba(243,205,130,.32)); }
   .sk-relogio .mostrador.treme { animation: sk-relogio-treme .55s cubic-bezier(.36,.07,.19,.97) 2; }
   @keyframes sk-relogio-treme { 10%,90% { transform: translate(-2px,1px) }
@@ -3079,7 +3228,7 @@ LW.skins.relogio = {
   .sk-relogio .cel.cheio .bev { opacity: .26; }
   .sk-relogio .cel.perdido .lad { stroke: rgba(255,255,255,.14); stroke-dasharray: 2.4 2.4; }
   .sk-relogio .cel.perdido .bev { opacity: .08; }
-  .sk-relogio .cel.vazio.frio .lad { fill: rgba(120,160,200,.05); stroke: rgba(140,180,220,.18); }
+  .sk-relogio .cel.vazio.frio .lad { fill: rgba(120,160,200,.07); stroke: rgba(150,190,230,.26); }
   .sk-relogio .cel.agora .lad { fill: rgba(243,205,130,.20); stroke: #F7D68F; stroke-width: 1.8;
     animation: sk-relogio-soquete 1.9s ease-in-out infinite; }
   @keyframes sk-relogio-soquete { 0%,100% { stroke-opacity: 1 } 50% { stroke-opacity: .3 } }
@@ -3142,9 +3291,10 @@ LW.skins.relogio = {
 
   .sk-relogio .mao { position: relative; z-index: 4; flex: 0 0 auto;
     padding: 0 6px max(12px, env(safe-area-inset-bottom)); }
-  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 10px; }
+  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 9px; }
   .sk-relogio .fila + .fila { margin-top: 5px; }
-  .sk-relogio .ficha { position: relative; width: 63px; height: 100px; border-radius: 13px;
+  /* encolhe (sem quebrar) em telas mais estreitas que 375 */
+  .sk-relogio .ficha { position: relative; flex: 0 1 63px; height: 100px; border-radius: 13px;
     background: linear-gradient(177deg, #28323F 0%, #1A222C 52%, #0F151D 100%);
     box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06);
     display: flex; flex-direction: column; align-items: center; cursor: pointer; overflow: hidden;
@@ -3168,6 +3318,9 @@ LW.skins.relogio = {
     transform: translateY(calc(var(--dy) + 8px)) rotate(var(--rot)) scale(.94); }
   .sk-relogio .ficha.indisponivel:hover { transform: translateY(calc(var(--dy) + 8px)) rotate(var(--rot)) scale(.94);
     box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06); }
+  .sk-relogio .ficha.repensa { animation: sk-relogio-repensa 1.5s ease-out 2; }
+  @keyframes sk-relogio-repensa { 0%,100% { box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 0 0 1px rgba(255,255,255,.06) }
+    50% { box-shadow: 0 8px 22px rgba(0,0,0,.62), inset 0 0 0 2px var(--c), 0 0 16px var(--c) } }
   .sk-relogio .ficha.nega { animation: sk-relogio-nega .4s; }
   @keyframes sk-relogio-nega { 25% { transform: translate(-6px, var(--dy)) rotate(var(--rot)) }
     75% { transform: translate(6px, var(--dy)) rotate(var(--rot)) } }
@@ -3188,7 +3341,8 @@ LW.skins.relogio = {
     .sk-relogio .halo, .sk-relogio .cel.agora .lad, .sk-relogio .cel.novo .lad,
     .sk-relogio .cel.novo .bev, .sk-relogio .cel.novo .prof, .sk-relogio .onda,
     .sk-relogio .delta, .sk-relogio .pulso, .sk-relogio .clarao.on,
-    .sk-relogio .mostrador.treme, .sk-relogio .ficha.nega { animation: none; }
+    .sk-relogio .mostrador.treme, .sk-relogio .ficha.nega,
+    .sk-relogio .ficha.repensa { animation: none; }
   }`,
 
   html: `
@@ -3449,8 +3603,9 @@ LW.skins.relogio = {
       var buf = '';
       for (var s = 0; s < 5; s++) {
         var acao = ORDEM[f * 5 + s];
-        buf += '<div class="ficha" data-acao="' + acao + '" style="--c:' + COR[acao] +
-          ';--dy:' + DY[s] + 'px;--rot:' + ROT[s] + 'deg">' +
+        /* aria-label igual ao rótulo visível (o núcleo só preenche se faltar) */
+        buf += '<div class="ficha" data-acao="' + acao + '" aria-label="' + CURTO[acao] +
+          '" style="--c:' + COR[acao] + ';--dy:' + DY[s] + 'px;--rot:' + ROT[s] + 'deg">' +
           '<span class="capa"></span>' +
           '<svg class="gl" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.85" ' +
           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + GL[acao] + '</svg>' +
@@ -3465,7 +3620,9 @@ LW.skins.relogio = {
     var fichas = raiz.querySelectorAll('.ficha');
     var conta = function (el) {
       var a = el.dataset.acao;
-      if (el.classList.contains('indisponivel')) self.dizer('Hoje não dá: ' + ctx.REQ_TXT[a] + '.', true);
+      if (el.classList.contains('indisponivel')) {
+        self.dizer(ctx.REQ_TXT[a] ? 'Hoje não dá: ' + ctx.REQ_TXT[a] + '.' : 'Hoje não dá.', true);
+      }
       else self.dizer(DICA[a], false);
     };
     for (var x = 0; x < fichas.length; x++) {
@@ -3597,6 +3754,7 @@ LW.skins.relogio = {
     if (info.avisos.indexOf('saude_baixa') >= 0) txt += ' <b>Você não está bem.</b>';
     else if (info.avisos.indexOf('energia_critica') >= 0) txt += ' <b>Você está no limite.</b>';
     else if (info.avisos.indexOf('divida') >= 0) txt += ' <b>As contas te alcançaram.</b>';
+    if (ctx.estado.t >= ctx.HORIZON) txt = '<b>O anel fechou.</b> Estes foram os seus 50 dias.';
     this.ultima = txt;
     if (!info.evento) this.dizer(txt, info.avisos.length > 0);
 
@@ -3631,11 +3789,15 @@ LW.skins.relogio = {
 
   /* =============================== evento =============================== */
   evento: function (tipo, ctx) {
-    var e = this.el, self = this;
-    this.frio = true;
-    for (var i = 0; i < 50; i++) {
-      if (this.cels[i].g.getAttribute('class').indexOf('vazio') >= 0) {
-        this.cels[i].g.setAttribute('class', 'cel vazio frio');
+    var e = this.el, i;
+    /* só a crise econômica esfria o que ainda não foi vivido; a troca de gosto
+       é outra coisa — muda você, não o mundo */
+    if (tipo === 'crise') {
+      this.frio = true;
+      for (i = 0; i < 50; i++) {
+        if (this.cels[i].g.getAttribute('class').indexOf('vazio') >= 0) {
+          this.cels[i].g.setAttribute('class', 'cel vazio frio');
+        }
       }
     }
     var txt = tipo === 'crise'
@@ -3645,13 +3807,20 @@ LW.skins.relogio = {
     this.dizer(txt, true);
 
     if (ctx.reduzido) return;
-    e.raiz.classList.add('frio');
     if (tipo === 'crise') {
       var d = 'M62,96 L118,150 L96,178 L152,214 L138,262 L206,268 L242,232 L300,246';
       e.fis1.setAttribute('d', d); e.fis2.setAttribute('d', d);
+      e.raiz.classList.add('frio');
       e.raiz.classList.add('rachou');
       e.mostrador.classList.add('treme');
       setTimeout(function () { e.mostrador.classList.remove('treme'); }, 1200);
+    } else {
+      /* o gosto virou: as duas fichas de lazer voltam a ser um enigma */
+      var lz = [e.raiz.querySelector('[data-acao="leisure_a"]'), e.raiz.querySelector('[data-acao="leisure_b"]')];
+      for (i = 0; i < 2; i++) {
+        if (!lz[i]) continue;
+        lz[i].classList.remove('repensa'); void lz[i].offsetWidth; lz[i].classList.add('repensa');
+      }
     }
     e.clarao.classList.remove('on'); void e.clarao.offsetWidth; e.clarao.classList.add('on');
     setTimeout(function () { e.clarao.classList.remove('on'); }, 1300);
@@ -3694,10 +3863,14 @@ LW.skins.relogio = {
 
 /* === rua.js === */
 /* PELE: a rua — um quarteirão visto de lado.
-   Não há lista de opções: há um bairro. Cada lugar é uma fachada, e escolher
-   é ir até lá. O sol atravessa o céu num arco — é o relógio dos 50 dias.
-   Uma faixa de pano amarrada de um poste ao outro carrega o pedido.
-   Arte portada de prototipos/proto-rua.html. */
+   Não há lista de opções: há um bairro. Cada lugar é uma fachada, e escolher é
+   ir até lá — o personagem atravessa a rua e entra. O sol cruza o céu num arco:
+   é o relógio dos 50 dias. Uma faixa de pano amarrada entre dois postes carrega
+   o pedido. Arte portada de prototipos/proto-rua.html.
+
+   Regra de ouro deste arquivo: quem tem atributo transform NÃO pode receber
+   animação CSS de transform — a animação substitui o atributo e o desenho salta
+   para a origem. Por isso quase tudo que se mexe vive dentro de um <g> extra. */
 
 LW.skins.rua = {
   id: 'rua',
@@ -3715,7 +3888,7 @@ LW.skins.rua = {
   .sk-rua .giz { font-family: "Bradley Hand", "Marker Felt", "Segoe Print", cursive; }
 
   /* ---------- o mundo se mexe sozinho ---------- */
-  @keyframes sk-rua-deriva { from { transform: translateX(-140px) } to { transform: translateX(430px) } }
+  @keyframes sk-rua-deriva { from { transform: translateX(-150px) } to { transform: translateX(430px) } }
   .sk-rua .nuvem { animation: sk-rua-deriva linear infinite; }
   .sk-rua .n1 { animation-duration: 150s; animation-delay: -30s; }
   .sk-rua .n2 { animation-duration: 215s; animation-delay: -120s; }
@@ -3724,20 +3897,15 @@ LW.skins.rua = {
   @keyframes sk-rua-fumaca { 0% { transform: translate(0,0) scale(.4); opacity: 0 }
     25% { opacity: .5 } 100% { transform: translate(-11px,-40px) scale(1.5); opacity: 0 } }
   .sk-rua .puff { animation: sk-rua-fumaca 5.5s ease-out infinite; }
-  .sk-rua .puff:nth-of-type(2) { animation-delay: -1.9s; }
-  .sk-rua .puff:nth-of-type(3) { animation-delay: -3.7s; }
-
   @keyframes sk-rua-vapor { 0% { transform: translate(0,0) scale(.35); opacity: 0 }
     30% { opacity: .45 } 100% { transform: translate(7px,-28px) scale(1.2); opacity: 0 } }
   .sk-rua .vap { animation: sk-rua-vapor 3.4s ease-out infinite; }
-  .sk-rua .vap:nth-of-type(2) { animation-delay: -1.7s; }
 
   @keyframes sk-rua-balanco { 0%,100% { transform: rotate(-2deg) } 50% { transform: rotate(2deg) } }
   .sk-rua .pendurada { transform-box: fill-box; transform-origin: 50% 0;
     animation: sk-rua-balanco 4.6s ease-in-out infinite; }
   .sk-rua .roupa { transform-box: fill-box; transform-origin: 50% 0;
     animation: sk-rua-balanco 4.1s ease-in-out infinite; }
-  .sk-rua .roupa:nth-of-type(2) { animation-delay: -1.6s; }
 
   @keyframes sk-rua-ondula { 0%,100% { transform: translateY(0) rotate(-.35deg) }
     50% { transform: translateY(2px) rotate(.35deg) } }
@@ -3750,46 +3918,33 @@ LW.skins.rua = {
     animation: sk-rua-chama 1.15s ease-in-out infinite; }
   @keyframes sk-rua-brilho { 0%,100% { opacity: .55 } 50% { opacity: .85 } }
   .sk-rua .halo { animation: sk-rua-brilho 1.15s ease-in-out infinite; }
-  @keyframes sk-rua-poste { 0%,100% { opacity: .5 } 50% { opacity: .74 } }
+  @keyframes sk-rua-poste { 0%,100% { opacity: .5 } 50% { opacity: .76 } }
   .sk-rua .haloposte { animation: sk-rua-poste 3.4s ease-in-out infinite; }
   @keyframes sk-rua-neon { 0%,100% { opacity: 1 } 47% { opacity: 1 } 50% { opacity: .28 } 53% { opacity: 1 } }
   .sk-rua .neon { animation: sk-rua-neon 6.5s linear infinite; }
-  @keyframes sk-rua-lampada { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
-  .sk-rua .bulbo { animation: sk-rua-lampada 1.7s ease-in-out infinite; }
-  .sk-rua .bulbo:nth-of-type(even) { animation-delay: -.85s; }
 
   @keyframes sk-rua-agua { 0% { transform: translateY(0); opacity: .9 }
     100% { transform: translateY(13px); opacity: 0 } }
   .sk-rua .jato { animation: sk-rua-agua 1.5s linear infinite; }
-  .sk-rua .jato:nth-of-type(2) { animation-delay: -.5s; }
-  .sk-rua .jato:nth-of-type(3) { animation-delay: -1s; }
-
   @keyframes sk-rua-conversa { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
-  .sk-rua .figurinha { transform-box: fill-box; animation: sk-rua-conversa 2.9s ease-in-out infinite; }
-  .sk-rua .figurinha:nth-of-type(2) { animation-delay: -.9s; }
-  .sk-rua .figurinha:nth-of-type(3) { animation-delay: -1.7s; }
-  .sk-rua .figurinha:nth-of-type(4) { animation-delay: -2.3s; }
-
+  .sk-rua .figurinha { animation: sk-rua-conversa 2.9s ease-in-out infinite; }
   @keyframes sk-rua-voa { from { transform: translate(0,0) } to { transform: translate(-500px,-46px) } }
   .sk-rua .revoada { animation: sk-rua-voa 38s linear infinite; }
   @keyframes sk-rua-asas { 0%,100% { transform: scaleY(1) } 50% { transform: scaleY(.35) } }
   .sk-rua .asa { transform-box: fill-box; transform-origin: 50% 50%;
     animation: sk-rua-asas .5s ease-in-out infinite; }
-
   @keyframes sk-rua-fio { 0%,100% { transform: translateY(0) } 50% { transform: translateY(1.6px) } }
   .sk-rua .fios { animation: sk-rua-fio 6s ease-in-out infinite; }
   @keyframes sk-rua-cortina { 0%,100% { transform: skewX(0deg) } 50% { transform: skewX(3deg) } }
   .sk-rua .cortina { transform-box: fill-box; transform-origin: 50% 0;
     animation: sk-rua-cortina 5.4s ease-in-out infinite; }
-  @keyframes sk-rua-gato { 0% { transform: translateX(0) } 45% { transform: translateX(120px) }
-    50% { transform: translateX(120px) scaleX(-1) } 95% { transform: translateX(0) scaleX(-1) }
+  @keyframes sk-rua-gato { 0% { transform: translateX(0) } 45% { transform: translateX(130px) }
+    50% { transform: translateX(130px) scaleX(-1) } 95% { transform: translateX(0) scaleX(-1) }
     100% { transform: translateX(0) } }
   .sk-rua .gato { animation: sk-rua-gato 30s ease-in-out infinite; }
   @keyframes sk-rua-folha { 0% { transform: translate(0,0) rotate(0); opacity: 0 }
-    12% { opacity: .85 } 100% { transform: translate(-250px,120px) rotate(340deg); opacity: 0 } }
+    12% { opacity: .8 } 100% { transform: translate(-230px,150px) rotate(340deg); opacity: 0 } }
   .sk-rua .folha { animation: sk-rua-folha 15s linear infinite; }
-  .sk-rua .folha:nth-of-type(2) { animation-delay: -5.2s; }
-  .sk-rua .folha:nth-of-type(3) { animation-delay: -10.4s; }
 
   /* ---------- o personagem ---------- */
   .sk-rua .ator { transition: transform 520ms cubic-bezier(.42,0,.35,1); }
@@ -3819,16 +3974,15 @@ LW.skins.rua = {
   .sk-rua .lugar:focus-visible .destaque { opacity: .12; }
   .sk-rua .grade { opacity: 0; transition: opacity .35s; }
   .sk-rua .luz { transition: opacity .4s; }
-  .sk-rua .lugar.indisponivel { opacity: .62; }
-  .sk-rua .lugar.indisponivel .grade { opacity: .9; }
+  .sk-rua .preco { transition: fill .3s; }
+  .sk-rua .lugar.indisponivel { opacity: .6; cursor: not-allowed; }
+  .sk-rua .lugar.indisponivel .grade { opacity: .88; }
   .sk-rua .lugar.indisponivel .luz { opacity: .12; }
   .sk-rua .lugar.indisponivel .preco { fill: #ff9f8c; }
-  .sk-rua .lugar.indisponivel { cursor: not-allowed; }
-  .sk-rua .preco { transition: fill .3s; }
 
   @keyframes sk-rua-treme { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-3px) }
     40% { transform: translateX(3px) } 60% { transform: translateX(-2px) } 80% { transform: translateX(2px) } }
-  .sk-rua .treme { transform-box: fill-box; animation: sk-rua-treme .45s ease-in-out; }
+  .sk-rua .treme { animation: sk-rua-treme .45s ease-in-out; }
   @keyframes sk-rua-pulsa { 0% { transform: scale(1) } 45% { transform: scale(1.22) } 100% { transform: scale(1) } }
   .sk-rua .pulsa { transform-box: fill-box; transform-origin: 50% 100%;
     animation: sk-rua-pulsa .55s ease-out; }
@@ -3843,22 +3997,22 @@ LW.skins.rua = {
   .sk-rua.crise .ceuRuim { opacity: 1; }
 
   /* ---------- a legenda do que acabou de acontecer ---------- */
-  .sk-rua .fala { position: absolute; left: 0; right: 0; bottom: 6px; padding: 0 18px;
-    text-align: center; font-size: 13px; line-height: 1.32; color: #cbb9a4;
-    min-height: 2.6em; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+  .sk-rua .fala { position: absolute; left: 0; right: 0; bottom: 5px; padding: 0 16px;
+    text-align: center; font-size: 12.5px; line-height: 1.32; color: #d3c0a8;
+    min-height: 2.6em; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
   .sk-rua .fala b { color: #ffe0a8; font-weight: 700; }
 
-  /* ---------- o painel numérico do núcleo, escrito no asfalto ---------- */
+  /* ---------- o painel do núcleo, escrito no asfalto ---------- */
   .sk-rua .rodape { flex: 0 0 auto; width: 100%; max-width: 460px; margin: 0 auto;
     padding: 5px 14px max(8px, env(safe-area-inset-bottom));
-    background: linear-gradient(#1e1826, #14101c); }
+    background: linear-gradient(#1d1725, #131019); }
   .sk-rua .lw-numeros { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-  .sk-rua .lw-numeros.lw-explicito { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px 10px; }
+  .sk-rua .lw-numeros.lw-explicito { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px 9px; }
   .sk-rua .lw-numeros:empty { display: none; }
-  .sk-rua .lw-n { display: flex; align-items: baseline; gap: 4px; font-size: 10.5px;
-    color: #9b8b7c; letter-spacing: .01em; }
+  .sk-rua .lw-n { display: flex; align-items: baseline; gap: 4px; font-size: 10px;
+    line-height: 1.15; color: #9b8b7c; }
   .sk-rua .lw-n .lw-val { font-variant-numeric: tabular-nums; font-weight: 700;
-    font-size: 13px; color: #f0e2cc; }
+    font-size: 12.5px; color: #f0e2cc; }
   .sk-rua .lw-n.perigo .lw-val { color: #ff8a7a; }
   .sk-rua .lw-bar { display: block; width: 100%; height: 3px; border-radius: 2px;
     background: rgba(255,255,255,.10); }
@@ -3868,18 +4022,16 @@ LW.skins.rua = {
   @media (prefers-reduced-motion: reduce) {
     .sk-rua .nuvem, .sk-rua .puff, .sk-rua .vap, .sk-rua .pendurada, .sk-rua .roupa,
     .sk-rua .faixa, .sk-rua .chama, .sk-rua .halo, .sk-rua .haloposte, .sk-rua .neon,
-    .sk-rua .bulbo, .sk-rua .jato, .sk-rua .figurinha, .sk-rua .revoada, .sk-rua .asa,
-    .sk-rua .fios, .sk-rua .cortina, .sk-rua .gato, .sk-rua .folha, .sk-rua .tronco,
-    .sk-rua .andando .pf, .sk-rua .andando .pt, .sk-rua .treme, .sk-rua .pulsa,
-    .sk-rua .num { animation: none; }
+    .sk-rua .jato, .sk-rua .figurinha, .sk-rua .revoada, .sk-rua .asa, .sk-rua .fios,
+    .sk-rua .cortina, .sk-rua .gato, .sk-rua .folha, .sk-rua .tronco, .sk-rua .treme,
+    .sk-rua .pulsa, .sk-rua .num, .sk-rua .andando .pf, .sk-rua .andando .pt { animation: none; }
     .sk-rua .ator, .sk-rua .camadaFundo, .sk-rua .camadaFrente { transition: none; }
   }
   .sk-rua.parado .nuvem, .sk-rua.parado .puff, .sk-rua.parado .vap, .sk-rua.parado .pendurada,
   .sk-rua.parado .roupa, .sk-rua.parado .faixa, .sk-rua.parado .chama, .sk-rua.parado .halo,
-  .sk-rua.parado .haloposte, .sk-rua.parado .neon, .sk-rua.parado .bulbo, .sk-rua.parado .jato,
-  .sk-rua.parado .figurinha, .sk-rua.parado .revoada, .sk-rua.parado .asa, .sk-rua.parado .fios,
-  .sk-rua.parado .cortina, .sk-rua.parado .gato, .sk-rua.parado .folha,
-  .sk-rua.parado .tronco { animation: none; }
+  .sk-rua.parado .haloposte, .sk-rua.parado .neon, .sk-rua.parado .jato, .sk-rua.parado .figurinha,
+  .sk-rua.parado .revoada, .sk-rua.parado .asa, .sk-rua.parado .fios, .sk-rua.parado .cortina,
+  .sk-rua.parado .gato, .sk-rua.parado .folha, .sk-rua.parado .tronco { animation: none; }
   .sk-rua.parado .ator, .sk-rua.parado .camadaFundo, .sk-rua.parado .camadaFrente { transition: none; }`,
 
   html: `
@@ -3915,8 +4067,8 @@ LW.skins.rua = {
       <stop offset="0" stop-color="#d8ad83"/><stop offset="1" stop-color="#9c7458"/>
     </linearGradient>
     <linearGradient id="rua-chao" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#7a6152"/><stop offset=".55" stop-color="#3d3240"/>
-      <stop offset="1" stop-color="#1c1724"/>
+      <stop offset="0" stop-color="#9b7b64"/><stop offset=".42" stop-color="#6a5460"/>
+      <stop offset="1" stop-color="#241d29"/>
     </linearGradient>
     <linearGradient id="rua-dentro" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#6b4526" stop-opacity=".55"/>
@@ -3925,7 +4077,7 @@ LW.skins.rua = {
     </linearGradient>
     <radialGradient id="rua-vinheta" cx=".5" cy=".44" r=".8">
       <stop offset=".55" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".46"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".44"/>
     </radialGradient>
   </defs>
 
@@ -3958,12 +4110,12 @@ LW.skins.rua = {
       <g class="nuvem n3"><g fill="#fff" fill-opacity=".28">
         <ellipse cx="290" cy="172" rx="28" ry="6"/><ellipse cx="308" cy="168" rx="17" ry="5"/></g></g>
     </g>
-    <g class="revoada" transform="translate(430,0)" stroke="#2f4055" stroke-opacity=".45"
-       stroke-width="1.4" fill="none" stroke-linecap="round">
+    <g transform="translate(430,0)"><g class="revoada"
+       stroke="#2f4055" stroke-opacity=".45" stroke-width="1.4" fill="none" stroke-linecap="round">
       <g class="asa"><path d="M0 214 q5 -4 9 0"/><path d="M9 214 q5 -4 9 0"/></g>
       <g class="asa" style="animation-delay:-.2s"><path d="M24 202 q4 -3 7.5 0"/><path d="M31.5 202 q4 -3 7.5 0"/></g>
       <g class="asa" style="animation-delay:-.35s"><path d="M13 228 q3.5 -3 6.5 0"/><path d="M19.5 228 q3.5 -3 6.5 0"/></g>
-    </g>
+    </g></g>
     <g opacity=".5">
       <path d="M-60 300 L-60 258 L-16 258 L-16 236 L20 236 L20 268 L62 268 L62 244 L104 244
                L104 276 L152 276 L152 250 L196 250 L196 272 L244 272 L244 240 L288 240 L288 266
@@ -3980,10 +4132,10 @@ LW.skins.rua = {
       <path d="M-30 250 Q188 292 405 244" fill="none" stroke="#26303f" stroke-opacity=".6" stroke-width="1.4"/>
       <path d="M-30 266 Q188 310 405 260" fill="none" stroke="#26303f" stroke-opacity=".45" stroke-width="1.1"/>
       <g fill="#26303f" fill-opacity=".8">
-        <g class="pousado" transform="translate(96,274)">
+        <g transform="translate(96,274)">
           <ellipse cx="0" cy="-5" rx="4.6" ry="3.7"/><circle cx="3.4" cy="-9" r="2.5"/>
           <path d="M5.4 -9.8 l3.4 1.3 l-3.4 1.3 z"/><path d="M-4.2 -3 q-5 .8 -6.6 4.2 l7.4 -2.6 z"/></g>
-        <g class="pousado" transform="translate(268,278)">
+        <g transform="translate(268,278)">
           <ellipse cx="0" cy="-5" rx="4.4" ry="3.6"/><circle cx="-3.2" cy="-9" r="2.4"/>
           <path d="M-5.2 -9.8 l-3.2 1.3 l3.2 1.3 z"/><path d="M4 -3 q4.8 .8 6.4 4.2 l-7.2 -2.6 z"/></g>
       </g>
@@ -3991,412 +4143,413 @@ LW.skins.rua = {
   </g>
 
   <!-- ===================== A FILA DE FACHADAS ===================== -->
-  <g data-el="quarteirao">
-
-    <!-- sombra que os prédios jogam na calçada -->
-    <rect x="-40" y="452" width="460" height="20" fill="url(#rua-calcada)"/>
-    <g fill="#6b464f" opacity=".18">
-      <path d="M0 452 l16 20 h-16 z"/><path d="M62.5 452 l16 20 h-16 z"/>
-      <path d="M125 452 l16 20 h-16 z"/><path d="M187.5 452 l16 20 h-16 z"/>
-      <path d="M250 452 l16 20 h-16 z"/><path d="M312.5 452 l16 20 h-16 z"/>
-    </g>
-
-    <!-- ---------- 0 · sua casa (descansar) ---------- -->
-    <g class="lugar" data-acao="rest" transform="translate(0,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <path d="M1 308 L31 276 L61 308 Z" fill="#6d3c36"/>
-      <rect x="7" y="306" width="48" height="146" fill="#b0654f"/>
-      <rect x="7" y="306" width="48" height="5" fill="#8d4b3d"/>
-      <rect x="43" y="284" width="7" height="22" fill="#5d332e"/>
-      <g fill="#fff" fill-opacity=".45">
-        <circle class="puff" cx="46.5" cy="282" r="4.5"/><circle class="puff" cx="46.5" cy="282" r="3.8"/>
-        <circle class="puff" cx="46.5" cy="282" r="5"/></g>
-      <circle class="luz" cx="31" cy="334" r="20" fill="url(#rua-glowJanela)"/>
-      <rect class="luz" x="19" y="324" width="24" height="19" rx="1.5" fill="url(#rua-vidro)"/>
-      <path d="M19 333.5 h24 M31 324 v19" stroke="#6d3c36" stroke-width="1.7"/>
-      <rect class="cortina" x="20.5" y="325" width="9" height="13" fill="#f0e5cf" opacity=".5"/>
-      <rect x="22" y="406" width="18" height="46" rx="1.5" fill="#4c2a26"/>
-      <rect x="23.5" y="408" width="15" height="44" fill="#8b5236"/>
-      <circle cx="36" cy="431" r="1.4" fill="#f2c882"/>
-      <rect x="16" y="449" width="30" height="4" rx="1.5" fill="#cba175"/>
-      <rect class="grade" x="7" y="396" width="48" height="56" fill="#2b2620"/>
-      <text x="31" y="372" text-anchor="middle" font-size="9" letter-spacing=".3"
-            fill="#ffe8c8" font-weight="600">sua casa</text>
-      <text class="preco giz" x="31" y="390" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">de graça</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 1 · dona Ivone (ajudar) ---------- -->
-    <g class="lugar" data-acao="help" transform="translate(62.5,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <path d="M3 314 L31 288 L59 314 Z" fill="#3b5147"/>
-      <rect x="8" y="312" width="46" height="140" fill="#5f7d6e"/>
-      <rect x="8" y="312" width="46" height="5" fill="#4d6b5d"/>
-      <circle class="luz" cx="21" cy="340" r="16" fill="url(#rua-glowJanela)"/>
-      <rect class="luz" x="13" y="330" width="17" height="16" rx="1.5" fill="url(#rua-vidro)"/>
-      <path d="M13 338 h17 M21.5 330 v16" stroke="#33453c" stroke-width="1.5"/>
-      <g opacity=".8"><circle cx="25" cy="338" r="2.4" fill="#4a3229"/>
-        <path d="M21.5 346 q3.5 -5 7 0 z" fill="#4a3229"/></g>
-      <rect x="37" y="330" width="15" height="16" rx="1.5" fill="#3d5449"/>
-      <path d="M37 330 h15 M44.5 330 v16" stroke="#33453c" stroke-width="1.4"/>
-      <path d="M11 322 q20 6 34 1" stroke="#33453c" stroke-width=".9" fill="none"/>
-      <rect class="roupa" x="15" y="323.5" width="5" height="9" fill="#e6d3b4" opacity=".85"/>
-      <rect class="roupa" x="27" y="325" width="4.5" height="8" fill="#cfa9a0" opacity=".85"/>
-      <rect x="23" y="408" width="17" height="44" rx="1.5" fill="#33453c"/>
-      <rect x="24.5" y="410" width="14" height="42" fill="#7a6046"/>
-      <circle cx="36" cy="432" r="1.3" fill="#e8cf9a"/>
-      <g data-el="vaso" transform="translate(48,438)">
-        <path d="M-6 8 L6 8 L4.6 19 L-4.6 19 Z" fill="#a9614a"/>
-        <path d="M0 8 q-10 -6 -8.4 -15 q9 1.5 8.4 15" fill="#5f9a5e"/>
-        <path d="M0 8 q10 -7 9 -16.5 q-10 2 -9 16.5" fill="#6fae67"/>
-        <path d="M0 8 q1.6 -12 0 -18 q-3 9 0 18" fill="#84bd74"/>
-      </g>
-      <rect class="grade" x="8" y="398" width="46" height="54" fill="#2b2620"/>
-      <text x="31" y="374" text-anchor="middle" font-size="8.5" letter-spacing=".2"
-            fill="#e9f3e6" font-weight="600">dona ivone</text>
-      <text class="preco giz" x="31" y="391" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">−3 · dá trabalho</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 2 · o mercado (alimentar-se) ---------- -->
-    <g class="lugar" data-acao="eat" transform="translate(125,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <rect x="5" y="300" width="52" height="152" fill="#c08a3f"/>
-      <rect x="2" y="291" width="58" height="10" rx="2.5" fill="#8f6329"/>
-      <g class="luz">
-        <rect x="12" y="308" width="14" height="15" rx="1.5" fill="url(#rua-vidro)" opacity=".85"/>
-        <rect x="37" y="308" width="14" height="15" rx="1.5" fill="url(#rua-vidro)" opacity=".65"/>
-      </g>
-      <path d="M12 315.5 h14 M19 308 v15 M37 315.5 h14 M44 308 v15" stroke="#7d5623" stroke-width="1.5"/>
-      <rect x="5" y="330" width="52" height="14" fill="#a9762f"/>
-      <text x="31" y="341" text-anchor="middle" font-size="9" letter-spacing="1.1"
-            fill="#fff2d8" font-weight="700">MERCADO</text>
-      <g>
-        <path d="M3 352 h56 l-3 13 h-50 z" fill="#ead9bb"/>
-        <path d="M11 352 h8 l-3 13 h-8 z" fill="#c25046"/>
-        <path d="M27 352 h8 l-3 13 h-8 z" fill="#c25046"/>
-        <path d="M43 352 h8 l-3 13 h-8 z" fill="#c25046"/>
-      </g>
-      <circle class="luz" cx="31" cy="392" r="28" fill="url(#rua-glowJanela)"/>
-      <rect class="luz" x="9" y="372" width="44" height="28" rx="1.5" fill="url(#rua-vidro)"/>
-      <path d="M9 372 h44 M24 372 v28 M39 372 v28" stroke="#7d5623" stroke-width="1.8"/>
-      <rect x="22" y="412" width="18" height="40" rx="1.5" fill="#6b4720"/>
-      <rect class="luz" x="23.5" y="414" width="15" height="38" fill="#f2c97f" opacity=".9"/>
-      <g transform="translate(43,432)">
-        <rect x="0" y="8" width="16" height="12" rx="1.5" fill="#8a6435"/>
-        <path d="M0 12 h16" stroke="#6d4e28" stroke-width="1.4"/>
-        <circle cx="4" cy="5" r="3.4" fill="#d9603f"/><circle cx="11" cy="4" r="3.8" fill="#e07d3c"/>
-        <circle cx="7" cy="8" r="3.2" fill="#cf5a3a"/>
-      </g>
-      <g transform="translate(3,436)">
-        <rect x="0" y="6" width="14" height="10" rx="1.5" fill="#8a6435"/>
-        <circle cx="4" cy="4" r="3.2" fill="#7fa53f"/><circle cx="10" cy="3.4" r="3.4" fill="#93b84a"/>
-      </g>
-      <rect class="grade" x="9" y="372" width="44" height="80" fill="#2b2620"/>
-      <text class="preco giz" x="31" y="410" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">−4</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 3 · o serviço (trabalhar) ---------- -->
-    <g class="lugar" data-acao="work" transform="translate(187.5,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <path d="M0 300 L31 280 L62 300 Z" fill="#33495a"/>
-      <rect x="4" y="298" width="54" height="154" fill="#46606f"/>
-      <rect x="2" y="296" width="58" height="6" rx="1.5" fill="#38505f"/>
-      <rect x="43" y="284" width="8" height="14" rx="1" fill="#2c414f"/>
-      <g fill="#fff" fill-opacity=".4">
-        <circle class="vap" cx="47" cy="283" r="4.4"/><circle class="vap" cx="47" cy="283" r="3.6"/></g>
-      <g class="luz">
-        <rect x="9" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".9"/>
-        <rect x="25" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".55"/>
-        <rect x="41" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".85"/>
-        <rect x="9" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".62"/>
-        <rect x="25" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".92"/>
-        <rect x="41" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".5"/>
-      </g>
-      <path d="M15 308 v14 M31 308 v14 M47 308 v14 M15 330 v14 M31 330 v14 M47 330 v14"
-            stroke="#2c414f" stroke-width="1.4"/>
-      <circle cx="31" cy="360" r="8.5" fill="#e9dfc8" stroke="#2c414f" stroke-width="1.8"/>
-      <path d="M31 360 L31 355 M31 360 L34.5 361.6" stroke="#2c414f" stroke-width="1.5" stroke-linecap="round"/>
-      <rect x="7" y="392" width="48" height="60" fill="#20303a"/>
-      <g class="luz">
-        <rect x="7" y="402" width="48" height="50" fill="#f0b866"/>
-        <rect x="7" y="402" width="48" height="50" fill="url(#rua-dentro)"/>
-        <circle cx="31" cy="428" r="30" fill="url(#rua-glowJanela)"/>
-      </g>
-      <g class="luz" opacity=".95">
-        <rect x="13" y="428" width="12" height="24" fill="#8a6a42"/>
-        <rect x="11" y="423" width="16" height="5" rx="1.5" fill="#a9834f"/>
-        <path d="M40 452 v-16 h4.5 v16" fill="none" stroke="#7a5c38" stroke-width="2.4"/>
-        <circle cx="42" cy="430" r="3.6" fill="#7a5c38"/>
-        <path d="M29 452 v-9 h9 v9" fill="#8a6a42"/>
-      </g>
-      <g data-el="portao">
-        <rect x="7" y="392" width="48" height="22" fill="#93a6b0"/>
-        <path d="M7 396 h48 M7 401 h48 M7 406 h48 M7 411 h48" stroke="#6f8490" stroke-width="1.5"/>
-        <rect x="7" y="412" width="48" height="3.5" rx="1.5" fill="#5d7280"/>
-      </g>
-      <rect class="grade" x="7" y="392" width="48" height="60" fill="#2b2620"/>
-      <g class="pendurada" transform="translate(31,0)">
-        <path d="M-16 378 v-5 M16 378 v-5" stroke="#2c414f" stroke-width="1.4"/>
-        <rect x="-23" y="377" width="46" height="14" rx="2" fill="#eadfc4" stroke="#2c414f" stroke-width="1.4"/>
-        <text x="0" y="387.5" text-anchor="middle" font-size="8" letter-spacing=".7"
-              fill="#33495a" font-weight="700">O SERVIÇO</text>
-      </g>
-      <text class="preco giz" x="31" y="373" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">custa fôlego</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 4 · o curso (estudar) ---------- -->
-    <g class="lugar" data-acao="study" transform="translate(250,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <path d="M3 316 L31 292 L59 316 Z" fill="#5a3852"/>
-      <rect x="7" y="314" width="48" height="138" fill="#7e5273"/>
-      <rect x="3" y="311" width="56" height="6" rx="1.5" fill="#684161"/>
-      <g transform="translate(31,300)">
-        <path d="M-4.5 6 q0 -8 4.5 -8 q4.5 0 4.5 8 z" fill="#d9b25e"/>
-        <rect x="-6" y="6" width="12" height="2.4" rx="1.2" fill="#c09b4c"/>
-      </g>
-      <g class="luz">
-        <rect x="12" y="324" width="14" height="14" rx="1.4" fill="url(#rua-vidro)" opacity=".78"/>
-        <rect x="36" y="324" width="14" height="14" rx="1.4" fill="url(#rua-vidro)" opacity=".6"/>
-      </g>
-      <path d="M19 324 v14 M12 331 h14 M43 324 v14 M36 331 h14" stroke="#4b2f45" stroke-width="1.4"/>
-      <text x="31" y="360" text-anchor="middle" font-size="9.5" letter-spacing="1.4"
-            fill="#ffe9d5" font-weight="700">O CURSO</text>
-      <g class="luz">
-        <path d="M12 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)"/>
-        <path d="M34 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)" opacity=".82"/>
-      </g>
-      <path d="M20 380 v30 M12 396 h16 M42 380 v30 M34 396 h16" stroke="#4b2f45" stroke-width="1.5"/>
-      <rect x="23" y="422" width="17" height="30" rx="1.5" fill="#4b2f45"/>
-      <rect class="luz" x="24.5" y="424" width="14" height="28" fill="#eabf76" opacity=".88"/>
-      <g data-el="livros" transform="translate(46,452)">
-        <rect data-el="livro1" x="-9" y="-6" width="18" height="5.4" rx="1.4" fill="#c25046"/>
-        <rect data-el="livro2" x="-8" y="-12" width="16" height="5.4" rx="1.4" fill="#d9a13f"/>
-        <rect data-el="livro3" x="-8.6" y="-18" width="17" height="5.4" rx="1.4" fill="#5f8fa8"/>
-        <rect data-el="livro4" x="-7.4" y="-24" width="15" height="5.4" rx="1.4" fill="#9db98f"/>
-        <rect data-el="livro5" x="-8.2" y="-30" width="16" height="5.4" rx="1.4" fill="#c98fb0"/>
-        <rect data-el="livro6" x="-7" y="-36" width="14" height="5.4" rx="1.4" fill="#e6d3b4"/>
-      </g>
-      <rect class="grade" x="7" y="378" width="48" height="74" fill="#2b2620"/>
-      <text class="preco giz" x="31" y="373" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">−2 · e fôlego</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 5 · o bar (uma diversão) ---------- -->
-    <g class="lugar" data-acao="leisure_a" transform="translate(312.5,0)">
-      <rect class="hit" x="0" y="262" width="62.5" height="200" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="1.5" y="264" width="59.5" height="196" rx="5" fill="#fff"/>
-      <rect x="5" y="304" width="52" height="148" fill="#9c4a48"/>
-      <rect x="2" y="295" width="58" height="10" rx="2.5" fill="#743331"/>
-      <g class="luz">
-        <rect x="12" y="312" width="14" height="15" rx="1.4" fill="url(#rua-vidro)" opacity=".7"/>
-        <rect x="37" y="312" width="14" height="15" rx="1.4" fill="url(#rua-vidro)" opacity=".55"/>
-      </g>
-      <path d="M19 312 v15 M12 319.5 h14 M44 312 v15 M37 319.5 h14" stroke="#66302e" stroke-width="1.4"/>
-      <g class="neon">
-        <text x="27" y="348" text-anchor="middle" font-size="11" letter-spacing="2"
-              fill="#ffe08a" font-weight="700">O BAR</text>
-      </g>
-      <text data-el="marcaA" x="52" y="348" text-anchor="middle" font-size="12.5"
-            class="giz" fill="#ffe08a" opacity=".9">?</text>
-      <g>
-        <path d="M4 356 h54 l-3 12 h-48 z" fill="#e6ba62"/>
-        <path d="M12 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
-        <path d="M28 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
-        <path d="M44 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
-      </g>
-      <circle class="luz" cx="31" cy="404" r="30" fill="url(#rua-glowJanela)"/>
-      <g class="luz">
-        <rect x="10" y="376" width="20" height="24" rx="1.5" fill="url(#rua-vidro)"/>
-        <rect x="34" y="376" width="18" height="24" rx="1.5" fill="url(#rua-vidro)" opacity=".85"/>
-      </g>
-      <path d="M10 376 h20 M20 376 v24 M34 376 h18 M43 376 v24" stroke="#66302e" stroke-width="1.6"/>
-      <rect x="22" y="418" width="18" height="34" rx="1.5" fill="#5c2a29"/>
-      <rect class="luz" x="23.5" y="420" width="15" height="32" fill="#f5c67a" opacity=".9"/>
-      <g transform="translate(48,436)">
-        <rect x="-1" y="4" width="2" height="12" fill="#4d2725"/>
-        <ellipse cx="0" cy="4" rx="8" ry="2.6" fill="#7a4a35"/>
-        <rect x="-5.4" y="-.4" width="2.6" height="5" rx="1.2" fill="#ecd8ac"/>
-        <rect x="2.6" y="0" width="2.6" height="4.6" rx="1.2" fill="#ecd8ac"/>
-      </g>
-      <rect class="grade" x="7" y="374" width="48" height="78" fill="#2b2620"/>
-      <text class="preco giz" x="31" y="411" text-anchor="middle" font-size="9.5"
-            fill="#f4d8b4" opacity=".7">−3</text>
-      <rect class="foco" x="1.5" y="264" width="59.5" height="196" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
+  <rect x="-40" y="452" width="460" height="20" fill="url(#rua-calcada)"/>
+  <g fill="#6b464f" opacity=".16">
+    <path d="M0 452 l16 20 h-16 z"/><path d="M62.5 452 l16 20 h-16 z"/>
+    <path d="M125 452 l16 20 h-16 z"/><path d="M187.5 452 l16 20 h-16 z"/>
+    <path d="M250 452 l16 20 h-16 z"/><path d="M312.5 452 l16 20 h-16 z"/>
   </g>
+
+  <!-- ---------- 0 · sua casa (descansar) ---------- -->
+  <g class="lugar" data-acao="rest"><g transform="translate(0,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <path d="M1 308 L31 276 L61 308 Z" fill="#6d3c36"/>
+    <rect x="7" y="306" width="48" height="146" fill="#b0654f"/>
+    <rect x="7" y="306" width="48" height="5" fill="#8d4b3d"/>
+    <rect x="43" y="284" width="7" height="22" fill="#5d332e"/>
+    <g fill="#fff" fill-opacity=".45">
+      <circle class="puff" cx="46.5" cy="282" r="4.5"/>
+      <circle class="puff" cx="46.5" cy="282" r="3.8" style="animation-delay:-1.9s"/>
+      <circle class="puff" cx="46.5" cy="282" r="5" style="animation-delay:-3.7s"/></g>
+    <circle class="luz" cx="31" cy="334" r="20" fill="url(#rua-glowJanela)"/>
+    <rect class="luz" x="19" y="324" width="24" height="19" rx="1.5" fill="url(#rua-vidro)"/>
+    <path d="M19 333.5 h24 M31 324 v19" stroke="#6d3c36" stroke-width="1.7"/>
+    <rect class="cortina" x="20.5" y="325" width="9" height="13" fill="#f0e5cf" opacity=".5"/>
+    <rect x="22" y="400" width="18" height="52" rx="1.5" fill="#4c2a26"/>
+    <rect x="23.5" y="402" width="15" height="50" fill="#8b5236"/>
+    <circle cx="36" cy="428" r="1.4" fill="#f2c882"/>
+    <rect x="16" y="449" width="30" height="4" rx="1.5" fill="#cba175"/>
+    <rect class="grade" x="7" y="394" width="48" height="58" fill="#2b2620"/>
+    <text x="31" y="374" text-anchor="middle" font-size="9.5" letter-spacing=".3"
+          fill="#ffe8c8" font-weight="600">sua casa</text>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">de graça</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
+
+  <!-- ---------- 1 · dona Ivone (ajudar) ---------- -->
+  <g class="lugar" data-acao="help"><g transform="translate(62.5,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <path d="M3 314 L31 288 L59 314 Z" fill="#3b5147"/>
+    <rect x="8" y="312" width="46" height="140" fill="#5f7d6e"/>
+    <rect x="8" y="312" width="46" height="5" fill="#4d6b5d"/>
+    <circle class="luz" cx="21" cy="340" r="16" fill="url(#rua-glowJanela)"/>
+    <rect class="luz" x="13" y="330" width="17" height="16" rx="1.5" fill="url(#rua-vidro)"/>
+    <path d="M13 338 h17 M21.5 330 v16" stroke="#33453c" stroke-width="1.5"/>
+    <g opacity=".8"><circle cx="25" cy="338" r="2.4" fill="#4a3229"/>
+      <path d="M21.5 346 q3.5 -5 7 0 z" fill="#4a3229"/></g>
+    <rect x="37" y="330" width="15" height="16" rx="1.5" fill="#3d5449"/>
+    <path d="M37 330 h15 M44.5 330 v16" stroke="#33453c" stroke-width="1.4"/>
+    <path d="M11 322 q20 6 34 1" stroke="#33453c" stroke-width=".9" fill="none"/>
+    <rect class="roupa" x="15" y="323.5" width="5" height="9" fill="#e6d3b4" opacity=".85"/>
+    <rect class="roupa" x="27" y="325" width="4.5" height="8" fill="#cfa9a0" opacity=".85"
+          style="animation-delay:-1.6s"/>
+    <rect x="20" y="402" width="17" height="50" rx="1.5" fill="#33453c"/>
+    <rect x="21.5" y="404" width="14" height="48" fill="#7a6046"/>
+    <circle cx="33" cy="428" r="1.3" fill="#e8cf9a"/>
+    <g data-el="vaso"><g data-el="vasoEscala" transform="translate(47,442)">
+      <path d="M-6 8 L6 8 L4.6 19 L-4.6 19 Z" fill="#a9614a"/>
+      <path d="M0 8 q-10 -6 -8.4 -15 q9 1.5 8.4 15" fill="#5f9a5e"/>
+      <path d="M0 8 q10 -7 9 -16.5 q-10 2 -9 16.5" fill="#6fae67"/>
+      <path d="M0 8 q1.6 -12 0 -18 q-3 9 0 18" fill="#84bd74"/>
+    </g></g>
+    <rect class="grade" x="8" y="396" width="46" height="56" fill="#2b2620"/>
+    <text x="31" y="376" text-anchor="middle" font-size="9" letter-spacing=".2"
+          fill="#e9f3e6" font-weight="600">dona ivone</text>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">−3 e fôlego</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
+
+  <!-- ---------- 2 · o mercado (alimentar-se) ---------- -->
+  <g class="lugar" data-acao="eat"><g transform="translate(125,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <rect x="5" y="300" width="52" height="152" fill="#c08a3f"/>
+    <rect x="2" y="291" width="58" height="10" rx="2.5" fill="#8f6329"/>
+    <g class="luz">
+      <rect x="12" y="308" width="14" height="15" rx="1.5" fill="url(#rua-vidro)" opacity=".85"/>
+      <rect x="37" y="308" width="14" height="15" rx="1.5" fill="url(#rua-vidro)" opacity=".65"/>
+    </g>
+    <path d="M12 315.5 h14 M19 308 v15 M37 315.5 h14 M44 308 v15" stroke="#7d5623" stroke-width="1.5"/>
+    <rect x="5" y="330" width="52" height="14" fill="#a9762f"/>
+    <text x="31" y="341" text-anchor="middle" font-size="9" letter-spacing="1.1"
+          fill="#fff2d8" font-weight="700">MERCADO</text>
+    <g>
+      <path d="M3 352 h56 l-3 13 h-50 z" fill="#ead9bb"/>
+      <path d="M11 352 h8 l-3 13 h-8 z" fill="#c25046"/>
+      <path d="M27 352 h8 l-3 13 h-8 z" fill="#c25046"/>
+      <path d="M43 352 h8 l-3 13 h-8 z" fill="#c25046"/>
+    </g>
+    <circle class="luz" cx="31" cy="396" r="30" fill="url(#rua-glowJanela)"/>
+    <rect class="luz" x="9" y="372" width="44" height="28" rx="1.5" fill="url(#rua-vidro)"/>
+    <path d="M9 372 h44 M24 372 v28 M39 372 v28" stroke="#7d5623" stroke-width="1.8"/>
+    <rect x="22" y="410" width="18" height="42" rx="1.5" fill="#6b4720"/>
+    <rect class="luz" x="23.5" y="412" width="15" height="40" fill="#f2c97f" opacity=".9"/>
+    <g transform="translate(43,432)">
+      <rect x="0" y="8" width="16" height="12" rx="1.5" fill="#8a6435"/>
+      <path d="M0 12 h16" stroke="#6d4e28" stroke-width="1.4"/>
+      <circle cx="4" cy="5" r="3.4" fill="#d9603f"/><circle cx="11" cy="4" r="3.8" fill="#e07d3c"/>
+      <circle cx="7" cy="8" r="3.2" fill="#cf5a3a"/>
+    </g>
+    <g transform="translate(3,436)">
+      <rect x="0" y="6" width="14" height="10" rx="1.5" fill="#8a6435"/>
+      <circle cx="4" cy="4" r="3.2" fill="#7fa53f"/><circle cx="10" cy="3.4" r="3.4" fill="#93b84a"/>
+    </g>
+    <rect class="grade" x="9" y="372" width="44" height="80" fill="#2b2620"/>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">−4</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
+
+  <!-- ---------- 3 · o serviço (trabalhar) ---------- -->
+  <g class="lugar" data-acao="work"><g transform="translate(187.5,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <path d="M0 300 L31 280 L62 300 Z" fill="#33495a"/>
+    <rect x="4" y="298" width="54" height="154" fill="#46606f"/>
+    <rect x="2" y="296" width="58" height="6" rx="1.5" fill="#38505f"/>
+    <rect x="43" y="284" width="8" height="14" rx="1" fill="#2c414f"/>
+    <g fill="#fff" fill-opacity=".4">
+      <circle class="vap" cx="47" cy="283" r="4.4"/>
+      <circle class="vap" cx="47" cy="283" r="3.6" style="animation-delay:-1.7s"/></g>
+    <g class="luz">
+      <rect x="9" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".9"/>
+      <rect x="25" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".55"/>
+      <rect x="41" y="308" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".85"/>
+      <rect x="9" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".62"/>
+      <rect x="25" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".92"/>
+      <rect x="41" y="330" width="12" height="14" rx="1.2" fill="url(#rua-vidro)" opacity=".5"/>
+    </g>
+    <path d="M15 308 v14 M31 308 v14 M47 308 v14 M15 330 v14 M31 330 v14 M47 330 v14"
+          stroke="#2c414f" stroke-width="1.4"/>
+    <circle cx="31" cy="358" r="8.5" fill="#e9dfc8" stroke="#2c414f" stroke-width="1.8"/>
+    <path d="M31 358 L31 353 M31 358 L34.5 359.6" stroke="#2c414f" stroke-width="1.5" stroke-linecap="round"/>
+    <rect x="7" y="392" width="48" height="60" fill="#20303a"/>
+    <g class="luz">
+      <rect x="7" y="402" width="48" height="50" fill="#f0b866"/>
+      <rect x="7" y="402" width="48" height="50" fill="url(#rua-dentro)"/>
+      <circle cx="31" cy="428" r="30" fill="url(#rua-glowJanela)"/>
+    </g>
+    <g class="luz" opacity=".95">
+      <rect x="13" y="428" width="12" height="24" fill="#8a6a42"/>
+      <rect x="11" y="423" width="16" height="5" rx="1.5" fill="#a9834f"/>
+      <path d="M40 452 v-16 h4.5 v16" fill="none" stroke="#7a5c38" stroke-width="2.4"/>
+      <circle cx="42" cy="430" r="3.6" fill="#7a5c38"/>
+      <path d="M29 452 v-9 h9 v9" fill="#8a6a42"/>
+    </g>
+    <g data-el="portao">
+      <rect x="7" y="392" width="48" height="22" fill="#93a6b0"/>
+      <path d="M7 396 h48 M7 401 h48 M7 406 h48 M7 411 h48" stroke="#6f8490" stroke-width="1.5"/>
+      <rect x="7" y="412" width="48" height="3.5" rx="1.5" fill="#5d7280"/>
+    </g>
+    <rect class="grade" x="7" y="392" width="48" height="60" fill="#2b2620"/>
+    <g transform="translate(31,0)"><g class="pendurada">
+      <path d="M-16 376 v-5 M16 376 v-5" stroke="#2c414f" stroke-width="1.4"/>
+      <rect x="-23" y="375" width="46" height="14" rx="2" fill="#eadfc4" stroke="#2c414f" stroke-width="1.4"/>
+      <text x="0" y="385.5" text-anchor="middle" font-size="8" letter-spacing=".7"
+            fill="#33495a" font-weight="700">O SERVIÇO</text>
+    </g></g>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">custa fôlego</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
+
+  <!-- ---------- 4 · o curso (estudar) ---------- -->
+  <g class="lugar" data-acao="study"><g transform="translate(250,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <path d="M3 316 L31 292 L59 316 Z" fill="#5a3852"/>
+    <rect x="7" y="314" width="48" height="138" fill="#7e5273"/>
+    <rect x="3" y="311" width="56" height="6" rx="1.5" fill="#684161"/>
+    <g transform="translate(31,300)">
+      <path d="M-4.5 6 q0 -8 4.5 -8 q4.5 0 4.5 8 z" fill="#d9b25e"/>
+      <rect x="-6" y="6" width="12" height="2.4" rx="1.2" fill="#c09b4c"/>
+    </g>
+    <g class="luz">
+      <rect x="12" y="324" width="14" height="14" rx="1.4" fill="url(#rua-vidro)" opacity=".78"/>
+      <rect x="36" y="324" width="14" height="14" rx="1.4" fill="url(#rua-vidro)" opacity=".6"/>
+    </g>
+    <path d="M19 324 v14 M12 331 h14 M43 324 v14 M36 331 h14" stroke="#4b2f45" stroke-width="1.4"/>
+    <text x="31" y="360" text-anchor="middle" font-size="9.5" letter-spacing="1.4"
+          fill="#ffe9d5" font-weight="700">O CURSO</text>
+    <g class="luz">
+      <path d="M12 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)"/>
+      <path d="M34 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)" opacity=".82"/>
+    </g>
+    <path d="M20 380 v30 M12 396 h16 M42 380 v30 M34 396 h16" stroke="#4b2f45" stroke-width="1.5"/>
+    <rect x="21" y="422" width="17" height="30" rx="1.5" fill="#4b2f45"/>
+    <rect class="luz" x="22.5" y="424" width="14" height="28" fill="#eabf76" opacity=".88"/>
+    <g data-el="livros"><g transform="translate(47,452)">
+      <rect data-el="livro1" x="-9" y="-6" width="18" height="5.4" rx="1.4" fill="#c25046"/>
+      <rect data-el="livro2" x="-8" y="-12" width="16" height="5.4" rx="1.4" fill="#d9a13f"/>
+      <rect data-el="livro3" x="-8.6" y="-18" width="17" height="5.4" rx="1.4" fill="#5f8fa8"/>
+      <rect data-el="livro4" x="-7.4" y="-24" width="15" height="5.4" rx="1.4" fill="#9db98f"/>
+      <rect data-el="livro5" x="-8.2" y="-30" width="16" height="5.4" rx="1.4" fill="#c98fb0"/>
+      <rect data-el="livro6" x="-7" y="-36" width="14" height="5.4" rx="1.4" fill="#e6d3b4"/>
+    </g></g>
+    <rect class="grade" x="7" y="378" width="48" height="74" fill="#2b2620"/>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">−2 e fôlego</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
+
+  <!-- ---------- 5 · o bar (uma diversão) ---------- -->
+  <g class="lugar" data-acao="leisure_a"><g transform="translate(312.5,0)">
+    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
+    <rect x="5" y="304" width="52" height="148" fill="#9c4a48"/>
+    <rect x="2" y="295" width="58" height="10" rx="2.5" fill="#743331"/>
+    <g class="luz">
+      <rect x="12" y="312" width="14" height="15" rx="1.4" fill="url(#rua-vidro)" opacity=".7"/>
+      <rect x="37" y="312" width="14" height="15" rx="1.4" fill="url(#rua-vidro)" opacity=".55"/>
+    </g>
+    <path d="M19 312 v15 M12 319.5 h14 M44 312 v15 M37 319.5 h14" stroke="#66302e" stroke-width="1.4"/>
+    <g class="neon">
+      <text x="35" y="348" text-anchor="middle" font-size="10" letter-spacing="1.4"
+            fill="#ffe08a" font-weight="700">O BAR</text>
+    </g>
+    <circle cx="11" cy="344" r="7.5" fill="#3a1f1e" stroke="#e6ba62" stroke-width="1.2" opacity=".9"/>
+    <text data-el="marcaA" x="11" y="348" text-anchor="middle" font-size="11.5"
+          class="giz" fill="#ffe08a" opacity=".9">?</text>
+    <g>
+      <path d="M4 356 h54 l-3 12 h-48 z" fill="#e6ba62"/>
+      <path d="M12 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+      <path d="M28 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+      <path d="M44 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+    </g>
+    <circle class="luz" cx="31" cy="404" r="30" fill="url(#rua-glowJanela)"/>
+    <g class="luz">
+      <rect x="10" y="376" width="20" height="24" rx="1.5" fill="url(#rua-vidro)"/>
+      <rect x="34" y="376" width="18" height="24" rx="1.5" fill="url(#rua-vidro)" opacity=".85"/>
+    </g>
+    <path d="M10 376 h20 M20 376 v24 M34 376 h18 M43 376 v24" stroke="#66302e" stroke-width="1.6"/>
+    <rect x="20" y="416" width="18" height="36" rx="1.5" fill="#5c2a29"/>
+    <rect class="luz" x="21.5" y="418" width="15" height="34" fill="#f5c67a" opacity=".9"/>
+    <g transform="translate(48,436)">
+      <rect x="-1" y="4" width="2" height="12" fill="#4d2725"/>
+      <ellipse cx="0" cy="4" rx="8" ry="2.6" fill="#7a4a35"/>
+      <rect x="-5.4" y="-.4" width="2.6" height="5" rx="1.2" fill="#ecd8ac"/>
+      <rect x="2.6" y="0" width="2.6" height="4.6" rx="1.2" fill="#ecd8ac"/>
+    </g>
+    <rect class="grade" x="7" y="374" width="48" height="78" fill="#2b2620"/>
+    <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
+          fill="#4a3524" opacity=".9">−3</text>
+    <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g></g>
 
   <!-- ===================== O ASFALTO ===================== -->
-  <rect x="-40" y="470" width="460" height="54" fill="#2f2833"/>
-  <g stroke="#e0b06a" stroke-opacity=".28" stroke-width="2.6" stroke-linecap="round">
-    <path d="M-20 498 h22 M22 498 h22 M64 498 h22 M106 498 h22 M148 498 h22 M190 498 h22
-             M232 498 h22 M274 498 h22 M316 498 h22 M358 498 h22"/>
+  <rect x="-40" y="470" width="460" height="50" fill="#2f2833"/>
+  <g stroke="#e0b06a" stroke-opacity=".26" stroke-width="2.6" stroke-linecap="round">
+    <path d="M-20 496 h22 M22 496 h22 M64 496 h22 M106 496 h22 M148 496 h22 M190 496 h22
+             M232 496 h22 M274 496 h22 M316 496 h22 M358 496 h22"/>
   </g>
-  <rect x="-40" y="518" width="460" height="10" fill="#c9a483"/>
-  <rect x="-40" y="526" width="460" height="286" fill="url(#rua-chao)"/>
-  <g stroke="#000" stroke-opacity=".12" stroke-width="1.2" fill="none">
-    <path d="M-40 572 H420 M-40 630 H420 M-40 700 H420"/>
-    <path d="M30 526 L-6 812 M120 526 L104 812 M215 526 L228 812 M310 526 L350 812"/>
+  <rect x="-40" y="514" width="460" height="10" fill="#c9a483"/>
+  <rect x="-40" y="522" width="460" height="290" fill="url(#rua-chao)"/>
+  <g stroke="#000" stroke-opacity=".10" stroke-width="1.2" fill="none">
+    <path d="M-40 578 H420 M-40 646 H420 M-40 722 H420"/>
+    <path d="M30 522 L-16 812 M120 522 L100 812 M215 522 L232 812 M310 522 L360 812"/>
   </g>
+  <ellipse cx="222" cy="656" rx="96" ry="46" fill="url(#rua-glowLamp)" opacity=".30"/>
+  <ellipse cx="20" cy="690" rx="86" ry="42" fill="url(#rua-glowLamp)" opacity=".20"/>
 
   <!-- ===================== A OUTRA CALÇADA ===================== -->
-  <g data-el="perto">
 
-    <!-- ---------- 6 · a praça (outra diversão) ---------- -->
-    <g class="lugar" data-acao="leisure_b" transform="translate(0,0)">
-      <rect class="hit" x="4" y="520" width="112" height="142" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="4" y="520" width="112" height="142" rx="7" fill="#fff"/>
-      <ellipse cx="34" cy="652" rx="30" ry="7" fill="#000" opacity=".22"/>
-      <g>
-        <rect x="29" y="580" width="10" height="72" fill="#6a4a34"/>
-        <circle cx="34" cy="566" r="34" fill="#3f7048"/>
-        <circle cx="58" cy="582" r="21" fill="#4a8052"/>
-        <circle cx="12" cy="584" r="18" fill="#356140"/>
-        <circle cx="40" cy="552" r="17" fill="#4f8a58"/>
-      </g>
-      <ellipse cx="90" cy="654" rx="26" ry="7" fill="#000" opacity=".2"/>
-      <g transform="translate(90,596)">
-        <ellipse cx="0" cy="52" rx="25" ry="7" fill="#7fa3b5"/>
-        <path d="M-25 52 a25 7 0 0 0 50 0 v-10 a25 7 0 0 1 -50 0 z" fill="#a1bcc9"/>
-        <rect x="-2.6" y="24" width="5.2" height="24" fill="#bacfd9"/>
-        <circle cx="0" cy="22" r="6" fill="#d3e3ea"/>
-        <g fill="#e4f2f8" opacity=".9">
-          <circle class="jato" cx="-5" cy="26" r="1.9"/><circle class="jato" cx="5" cy="26" r="1.9"/>
-          <circle class="jato" cx="0" cy="24" r="1.9"/></g>
-      </g>
-      <g transform="translate(16,614)">
-        <rect x="0" y="20" width="34" height="4.4" rx="2" fill="#8a6a48"/>
-        <rect x="0" y="12" width="34" height="4.4" rx="2" fill="#8a6a48"/>
-        <rect x="2" y="24" width="3.4" height="11" fill="#6d5237"/>
-        <rect x="28" y="24" width="3.4" height="11" fill="#6d5237"/>
-      </g>
-      <text x="60" y="540" text-anchor="middle" font-size="10.5" letter-spacing="1.6"
-            fill="#ffeccd" font-weight="700">A PRAÇA</text>
-      <text data-el="marcaB" x="103" y="540" text-anchor="middle" font-size="13"
-            class="giz" fill="#ffe08a" opacity=".9">?</text>
-      <text class="preco giz" x="60" y="672" text-anchor="middle" font-size="10"
-            fill="#e8cfae" opacity=".65">−3</text>
-      <rect class="grade" x="4" y="520" width="112" height="142" rx="7" fill="#1a1620" opacity="0"/>
-      <rect class="foco" x="4" y="520" width="112" height="142" rx="7" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- 7 · a esquina com gente (socializar) ---------- -->
-    <g class="lugar" data-acao="socialize" transform="translate(0,0)">
-      <rect class="hit" x="122" y="520" width="106" height="142" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="122" y="520" width="106" height="142" rx="7" fill="#fff"/>
-      <g transform="translate(222,506)">
-        <rect x="-2.6" y="0" width="5.6" height="150" fill="#42505c"/>
-        <circle cx="0.4" cy="-6" r="7" fill="#ffdda1"/>
-        <circle class="haloposte" cx="0.4" cy="-6" r="24" fill="url(#rua-glowLamp)" opacity=".55"/>
-      </g>
-      <ellipse cx="172" cy="654" rx="46" ry="8" fill="#000" opacity=".22"/>
-      <g data-el="fig1" class="figurinha" transform="translate(140,592)">
-        <circle cx="0" cy="0" r="7.5" fill="#4a3a52"/>
-        <path d="M-10 60 q10 -56 20 0 z" fill="#6d5a8a"/></g>
-      <g data-el="fig2" class="figurinha" transform="translate(166,588)">
-        <circle cx="0" cy="0" r="8" fill="#513a34"/>
-        <path d="M-10.5 64 q10.5 -60 21 0 z" fill="#a1615a"/></g>
-      <g data-el="fig3" class="figurinha" transform="translate(192,594)">
-        <circle cx="0" cy="0" r="7.5" fill="#33404f"/>
-        <path d="M-10 58 q10 -54 20 0 z" fill="#4c6a7d"/></g>
-      <g data-el="fig4" class="figurinha" transform="translate(214,598)">
-        <circle cx="0" cy="0" r="7" fill="#3f3a2e"/>
-        <path d="M-9.5 54 q9.5 -50 19 0 z" fill="#7d8a5f"/></g>
-      <text x="170" y="540" text-anchor="middle" font-size="10.5" letter-spacing="1.4"
-            fill="#ffe6d0" font-weight="700">A ESQUINA</text>
-      <text class="preco giz" x="170" y="672" text-anchor="middle" font-size="10"
-            fill="#e8cfae" opacity=".65">−2</text>
-      <rect class="grade" x="122" y="520" width="106" height="142" rx="7" fill="#1a1620" opacity="0"/>
-      <rect class="foco" x="122" y="520" width="106" height="142" rx="7" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
-
-    <!-- ---------- o banco: a guarita de vidro ---------- -->
+  <!-- ---------- 6 · a praça (outra diversão) ---------- -->
+  <g class="lugar" data-acao="leisure_b">
+    <rect class="hit" x="4" y="518" width="112" height="148" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="4" y="518" width="112" height="148" rx="7" fill="#fff"/>
+    <ellipse cx="42" cy="652" rx="30" ry="7" fill="#2a2130" opacity=".3"/>
     <g>
-      <ellipse cx="302" cy="656" rx="70" ry="9" fill="#000" opacity=".22"/>
-      <rect x="232" y="516" width="140" height="10" rx="2.5" fill="#5f594d"/>
-      <rect x="234" y="524" width="136" height="128" fill="#7d7566"/>
-      <rect x="234" y="524" width="136" height="6" fill="#948b79"/>
-      <text x="302" y="513" text-anchor="middle" font-size="9.5" letter-spacing="2.6"
-            fill="#f2ead6" font-weight="700">BANCO</text>
-      <rect x="299" y="530" width="6" height="120" fill="#6d6759"/>
-      <g data-el="tuboFundo">
-        <rect x="296" y="560" width="12" height="86" rx="5" fill="#3a362f"/>
-        <rect data-el="tubo" x="297.5" y="600" width="9" height="44" rx="4" fill="#ffd166" opacity=".92"/>
-        <rect x="296" y="560" width="12" height="86" rx="5" fill="none" stroke="#a49a86" stroke-width="1.4"/>
-      </g>
+      <rect x="37" y="580" width="10" height="72" fill="#6a4a34"/>
+      <circle cx="42" cy="566" r="33" fill="#40714a"/>
+      <circle cx="64" cy="582" r="20" fill="#4f8a58"/>
+      <circle cx="20" cy="584" r="17" fill="#386643"/>
+      <circle cx="48" cy="552" r="16" fill="#568f5d"/>
     </g>
+    <ellipse cx="92" cy="654" rx="24" ry="6" fill="#2a2130" opacity=".28"/>
+    <g transform="translate(92,596)">
+      <ellipse cx="0" cy="52" rx="24" ry="7" fill="#8fb3c4"/>
+      <path d="M-24 52 a24 7 0 0 0 48 0 v-10 a24 7 0 0 1 -48 0 z" fill="#b6ced8"/>
+      <rect x="-2.6" y="24" width="5.2" height="24" fill="#bacfd9"/>
+      <circle cx="0" cy="22" r="6" fill="#d3e3ea"/>
+      <g fill="#e4f2f8" opacity=".9">
+        <circle class="jato" cx="-5" cy="26" r="1.9"/>
+        <circle class="jato" cx="5" cy="26" r="1.9" style="animation-delay:-.5s"/>
+        <circle class="jato" cx="0" cy="24" r="1.9" style="animation-delay:-1s"/></g>
+    </g>
+    <g transform="translate(12,616)">
+      <rect x="0" y="20" width="34" height="4.4" rx="2" fill="#8a6a48"/>
+      <rect x="0" y="12" width="34" height="4.4" rx="2" fill="#8a6a48"/>
+      <rect x="2" y="24" width="3.4" height="11" fill="#6d5237"/>
+      <rect x="28" y="24" width="3.4" height="11" fill="#6d5237"/>
+    </g>
+    <text class="giz" x="54" y="539" text-anchor="middle" font-size="13"
+          fill="#f7e6c6" opacity=".92">a praça</text>
+    <circle cx="99" cy="534" r="9" fill="#2b2434" stroke="#e6ba62" stroke-width="1.2" opacity=".9"/>
+    <text data-el="marcaB" x="99" y="538" text-anchor="middle" font-size="12.5"
+          class="giz" fill="#ffe08a" opacity=".9">?</text>
+    <text class="preco giz" x="92" y="678" text-anchor="middle" font-size="10"
+          fill="#f0dcbc" opacity=".7">−3</text>
+    <rect class="grade" x="4" y="518" width="112" height="148" rx="7" fill="#141019" fill-opacity=".42"/>
+    <rect class="foco" x="4" y="518" width="112" height="148" rx="7" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g>
 
-    <!-- ---------- 8 · guardar ---------- -->
-    <g class="lugar" data-acao="save" transform="translate(0,0)">
-      <rect class="hit" x="236" y="530" width="60" height="122" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="236" y="532" width="60" height="118" rx="5" fill="#fff"/>
-      <rect x="240" y="546" width="52" height="80" rx="4" fill="#3d3a33"/>
-      <rect x="246" y="554" width="40" height="24" rx="2" fill="#8fd0c0" opacity=".55"/>
-      <rect x="252" y="588" width="28" height="5" rx="2.5" fill="#d9c48a"/>
-      <path d="M266 600 v14 M258 608 l8 8 l8 -8" stroke="#ffd166" stroke-width="2.6"
-            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="266" y="642" text-anchor="middle" font-size="10" class="giz"
-            fill="#fffaf0" opacity=".9">guardar 8</text>
-      <text class="preco giz" x="266" y="666" text-anchor="middle" font-size="9.5"
-            fill="#e8cfae" opacity=".6">tira 8 do bolso</text>
-      <rect class="grade" x="236" y="532" width="60" height="118" rx="5" fill="#1a1620" opacity="0"/>
-      <rect class="foco" x="236" y="532" width="60" height="118" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
+  <!-- ---------- 7 · a esquina com gente (socializar) ---------- -->
+  <g class="lugar" data-acao="socialize">
+    <rect class="hit" x="122" y="518" width="106" height="148" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="122" y="518" width="106" height="148" rx="7" fill="#fff"/>
+    <ellipse cx="176" cy="654" rx="46" ry="8" fill="#2a2130" opacity=".3"/>
+    <g transform="translate(140,594)"><g data-el="fig1" class="figurinha">
+      <circle cx="0" cy="0" r="7.5" fill="#4a3a52"/>
+      <path d="M-10 58 q10 -100 20 0 z" fill="#7a66a0"/></g></g>
+    <g transform="translate(166,590)"><g data-el="fig2" class="figurinha" style="animation-delay:-.9s">
+      <circle cx="0" cy="0" r="8" fill="#5b4038"/>
+      <path d="M-10.5 62 q10.5 -108 21 0 z" fill="#b06a62"/></g></g>
+    <g transform="translate(192,596)"><g data-el="fig3" class="figurinha" style="animation-delay:-1.7s">
+      <circle cx="0" cy="0" r="7.5" fill="#33404f"/>
+      <path d="M-10 56 q10 -96 20 0 z" fill="#557a8e"/></g></g>
+    <g transform="translate(214,600)"><g data-el="fig4" class="figurinha" style="animation-delay:-2.3s">
+      <circle cx="0" cy="0" r="7" fill="#453f31"/>
+      <path d="M-9.5 52 q9.5 -88 19 0 z" fill="#8a996b"/></g></g>
+    <text class="giz" x="172" y="539" text-anchor="middle" font-size="13"
+          fill="#f7e6c6" opacity=".92">a esquina</text>
+    <text class="preco giz" x="172" y="678" text-anchor="middle" font-size="10"
+          fill="#f0dcbc" opacity=".7">−2</text>
+    <rect class="grade" x="122" y="518" width="106" height="148" rx="7" fill="#141019" fill-opacity=".42"/>
+    <rect class="foco" x="122" y="518" width="106" height="148" rx="7" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g>
 
-    <!-- ---------- 9 · pegar ---------- -->
-    <g class="lugar" data-acao="withdraw" transform="translate(0,0)">
-      <rect class="hit" x="308" y="530" width="60" height="122" fill="transparent" pointer-events="all"/>
-      <rect class="destaque" x="310" y="532" width="60" height="118" rx="5" fill="#fff"/>
-      <rect x="314" y="546" width="52" height="80" rx="4" fill="#3d3a33"/>
-      <rect x="320" y="554" width="40" height="24" rx="2" fill="#8fd0c0" opacity=".55"/>
-      <rect x="326" y="612" width="28" height="6" rx="2" fill="#1f1d19"/>
-      <path d="M340 608 v-14 M332 602 l8 -8 l8 8" stroke="#ffd166" stroke-width="2.6"
-            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="340" y="642" text-anchor="middle" font-size="10" class="giz"
-            fill="#fffaf0" opacity=".9">pegar 8</text>
-      <text class="preco giz" x="340" y="666" text-anchor="middle" font-size="9.5"
-            fill="#e8cfae" opacity=".6">da reserva</text>
-      <rect class="grade" x="310" y="532" width="60" height="118" rx="5" fill="#1a1620" opacity="0"/>
-      <rect class="foco" x="310" y="532" width="60" height="118" rx="5" fill="none"
-            stroke="#ffe08a" stroke-width="2.5"/>
-    </g>
+  <!-- o poste da esquina, que acende a calçada -->
+  <g transform="translate(232,502)">
+    <rect x="-2.6" y="0" width="5.6" height="152" fill="#42505c"/>
+    <rect x="-6" y="148" width="12" height="6" rx="2" fill="#37424c"/>
+    <circle cx="0.4" cy="-6" r="7" fill="#ffdda1"/>
+    <circle class="haloposte" cx="0.4" cy="-6" r="26" fill="url(#rua-glowLamp)" opacity=".55"/>
+  </g>
+
+  <!-- ---------- o banco: a guarita ---------- -->
+  <g>
+    <ellipse cx="304" cy="658" rx="66" ry="9" fill="#2a2130" opacity=".32"/>
+    <rect x="238" y="512" width="134" height="10" rx="2.5" fill="#5f594d"/>
+    <rect x="240" y="520" width="130" height="132" fill="#7d7566"/>
+    <rect x="240" y="520" width="130" height="6" fill="#948b79"/>
+    <text x="305" y="509" text-anchor="middle" font-size="9.5" letter-spacing="2.6"
+          fill="#f2ead6" font-weight="700">BANCO</text>
+    <rect x="301" y="526" width="8" height="126" fill="#6d6759"/>
+    <rect x="299.5" y="556" width="11" height="88" rx="5" fill="#33302a"/>
+    <rect data-el="tubo" x="301" y="600" width="8" height="42" rx="4" fill="#ffd166" opacity=".95"/>
+    <rect x="299.5" y="556" width="11" height="88" rx="5" fill="none" stroke="#a49a86" stroke-width="1.3"/>
+  </g>
+
+  <!-- ---------- 8 · guardar ---------- -->
+  <g class="lugar" data-acao="save">
+    <rect class="hit" x="242" y="526" width="58" height="126" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="242" y="528" width="58" height="122" rx="5" fill="#fff"/>
+    <rect x="246" y="544" width="50" height="80" rx="4" fill="#3d3a33"/>
+    <rect x="252" y="552" width="38" height="22" rx="2" fill="#8fd0c0" opacity=".5"/>
+    <rect x="257" y="584" width="28" height="5" rx="2.5" fill="#d9c48a"/>
+    <path d="M271 596 v14 M263 604 l8 8 l8 -8" stroke="#ffd166" stroke-width="2.6"
+          fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="271" y="640" text-anchor="middle" font-size="10" class="giz"
+          fill="#fff6e4" opacity=".92">guardar 8</text>
+    <text class="preco giz" x="271" y="662" text-anchor="middle" font-size="9.5"
+          fill="#f0dcbc" opacity=".62">tira 8 do bolso</text>
+    <rect class="grade" x="242" y="528" width="58" height="122" rx="5" fill="#141019" fill-opacity=".42"/>
+    <rect class="foco" x="242" y="528" width="58" height="122" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
+  </g>
+
+  <!-- ---------- 9 · pegar ---------- -->
+  <g class="lugar" data-acao="withdraw">
+    <rect class="hit" x="310" y="526" width="58" height="126" fill="transparent" pointer-events="all"/>
+    <rect class="destaque" x="310" y="528" width="58" height="122" rx="5" fill="#fff"/>
+    <rect x="314" y="544" width="50" height="80" rx="4" fill="#3d3a33"/>
+    <rect x="320" y="552" width="38" height="22" rx="2" fill="#8fd0c0" opacity=".5"/>
+    <rect x="325" y="608" width="28" height="6" rx="2" fill="#1f1d19"/>
+    <path d="M339 604 v-14 M331 598 l8 -8 l8 8" stroke="#ffd166" stroke-width="2.6"
+          fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="339" y="640" text-anchor="middle" font-size="10" class="giz"
+          fill="#fff6e4" opacity=".92">pegar 8</text>
+    <text class="preco giz" x="339" y="662" text-anchor="middle" font-size="9.5"
+          fill="#f0dcbc" opacity=".62">da reserva</text>
+    <rect class="grade" x="310" y="528" width="58" height="122" rx="5" fill="#141019" fill-opacity=".42"/>
+    <rect class="foco" x="310" y="528" width="58" height="122" rx="5" fill="none"
+          stroke="#ffe08a" stroke-width="2.5"/>
   </g>
 
   <!-- o gato da rua -->
-  <g class="gato" transform="translate(150,0)">
-    <g transform="translate(0,704)">
-      <ellipse cx="0" cy="0" rx="11" ry="5" fill="#2a222c"/>
-      <circle cx="10" cy="-5" r="4.6" fill="#2a222c"/>
-      <path d="M7 -9 l1.6 -5 l3.4 4 z M12 -9 l3.4 -4 l1 5 z" fill="#2a222c"/>
-      <path d="M-11 -1 q-9 -3 -6 -11" stroke="#2a222c" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-      <rect x="-7" y="3" width="2.4" height="7" fill="#2a222c"/>
-      <rect x="5" y="3" width="2.4" height="7" fill="#2a222c"/>
-    </g>
-  </g>
+  <g transform="translate(120,712)"><g class="gato">
+    <ellipse cx="0" cy="0" rx="11" ry="5" fill="#2a222c"/>
+    <circle cx="10" cy="-5" r="4.6" fill="#2a222c"/>
+    <path d="M7 -9 l1.6 -5 l3.4 4 z M12 -9 l3.4 -4 l1 5 z" fill="#2a222c"/>
+    <path d="M-11 -1 q-9 -3 -6 -11" stroke="#2a222c" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <rect x="-7" y="3" width="2.4" height="7" fill="#2a222c"/>
+    <rect x="5" y="3" width="2.4" height="7" fill="#2a222c"/>
+  </g></g>
 
   <!-- ===================== O PERSONAGEM ===================== -->
-  <g data-el="ator" class="ator" style="transform:translate(31px,468px) scale(.62)">
+  <g data-el="ator" class="ator" style="transform:translate(47px,468px) scale(.66)">
     <g data-el="flip" class="flip">
       <g transform="translate(0,-641)">
         <ellipse cx="2" cy="641" rx="19" ry="4.5" fill="#241d29" opacity=".38"/>
@@ -4441,30 +4594,32 @@ LW.skins.rua = {
 
   <!-- ===================== PRIMEIRO PLANO (parallax rápido) ===================== -->
   <g data-el="frente" class="camadaFrente">
-    <g transform="translate(-14,0)">
-      <circle class="haloposte" cx="26" cy="452" r="44" fill="url(#rua-glowLamp)" opacity=".55"/>
-      <rect x="-5" y="466" width="10" height="270" fill="#241d2a"/>
-      <rect x="-9" y="712" width="18" height="24" rx="3" fill="#241d2a"/>
-      <path d="M0 468 q0 -18 18 -18 h8" stroke="#241d2a" stroke-width="8" fill="none"/>
-      <path d="M15 450 h22 l-6 16 h-10 z" fill="#241d2a"/>
-      <ellipse cx="26" cy="463" rx="9" ry="5" fill="#fff0cc"/>
-      <ellipse cx="0" cy="738" rx="20" ry="5" fill="#241d2a" opacity=".4"/>
-    </g>
-    <g transform="translate(352,0)">
+    <g transform="translate(26,0)">
       <g fill="#241d2a">
-        <circle cx="-16" cy="690" r="18"/><circle cx="4" cy="678" r="23"/>
-        <circle cx="26" cy="692" r="17"/><rect x="-28" y="682" width="60" height="34"/>
+        <circle cx="-14" cy="720" r="16"/><circle cx="4" cy="708" r="21"/>
+        <circle cx="24" cy="722" r="15"/><rect x="-26" y="712" width="54" height="34"/>
+      </g>
+      <g fill="#6b4d3f" opacity=".45">
+        <path d="M-26 700 a21 21 0 0 1 25 -8 a16 16 0 0 0 -22 10 z"/>
+        <path d="M9 688 a21 21 0 0 1 15 12 a17 17 0 0 0 -17 -8 z"/>
+      </g>
+      <ellipse cx="0" cy="748" rx="33" ry="6" fill="#241d2a" opacity=".4"/>
+    </g>
+    <g transform="translate(356,0)">
+      <g fill="#241d2a">
+        <circle cx="-16" cy="706" r="18"/><circle cx="4" cy="694" r="23"/>
+        <circle cx="26" cy="708" r="17"/><rect x="-28" y="698" width="60" height="34"/>
       </g>
       <g fill="#6b4d3f" opacity=".5">
-        <path d="M-28 668 a23 23 0 0 1 28 -9 a17 17 0 0 0 -24 11 z"/>
-        <path d="M10 654 a23 23 0 0 1 17 13 a18 18 0 0 0 -19 -9 z"/>
+        <path d="M-28 684 a23 23 0 0 1 28 -9 a17 17 0 0 0 -24 11 z"/>
+        <path d="M10 670 a23 23 0 0 1 17 13 a18 18 0 0 0 -19 -9 z"/>
       </g>
-      <ellipse cx="0" cy="720" rx="36" ry="6" fill="#241d2a" opacity=".4"/>
+      <ellipse cx="0" cy="736" rx="36" ry="6" fill="#241d2a" opacity=".4"/>
     </g>
     <g fill="#d9954f" opacity=".9">
-      <path class="folha" d="M300 400 q7 5 0 10 q-7 -6 0 -10"/>
-      <path class="folha" d="M240 360 q6 4.5 0 9 q-6 -5 0 -9"/>
-      <path class="folha" d="M340 430 q7 5 0 10 q-7 -6 0 -10"/>
+      <path class="folha" d="M300 392 q7 5 0 10 q-7 -6 0 -10"/>
+      <path class="folha" d="M244 352 q6 4.5 0 9 q-6 -5 0 -9" style="animation-delay:-5.2s"/>
+      <path class="folha" d="M338 424 q7 5 0 10 q-7 -6 0 -10" style="animation-delay:-10.4s"/>
     </g>
   </g>
 
@@ -4472,16 +4627,16 @@ LW.skins.rua = {
 
   <!-- ===================== A FAIXA DO PEDIDO ===================== -->
   <g pointer-events="none">
-    <rect x="12" y="176" width="5" height="560" fill="#2b2233" opacity=".85"/>
-    <rect x="358" y="176" width="5" height="560" fill="#2b2233" opacity=".85"/>
+    <rect x="6" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
+    <rect x="365" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
     <text x="187.5" y="192" text-anchor="middle" font-size="7.5" letter-spacing="2.6"
           fill="#ffe9c4" opacity=".85" font-weight="700">PEDIRAM A VOCÊ</text>
     <g class="faixa">
-      <path d="M6 198 L22 202" stroke="#c9b28a" stroke-width="1.4"/>
-      <path d="M369 198 L353 202" stroke="#c9b28a" stroke-width="1.4"/>
-      <path d="M22 200 Q187.5 224 353 200 L353 254 Q187.5 278 22 254 Z" fill="#f8efdb"/>
-      <path d="M22 200 Q187.5 224 353 200 L353 206 Q187.5 230 22 206 Z" fill="#e6d8bd"/>
-      <path d="M22 248 Q187.5 272 353 248 L353 254 Q187.5 278 22 254 Z" fill="#dbcaab" opacity=".8"/>
+      <path d="M2 198 L20 202" stroke="#c9b28a" stroke-width="1.4"/>
+      <path d="M373 198 L355 202" stroke="#c9b28a" stroke-width="1.4"/>
+      <path d="M20 200 Q187.5 224 355 200 L355 254 Q187.5 278 20 254 Z" fill="#f8efdb"/>
+      <path d="M20 200 Q187.5 224 355 200 L355 206 Q187.5 230 20 206 Z" fill="#e6d8bd"/>
+      <path d="M20 248 Q187.5 272 355 248 L355 254 Q187.5 278 20 254 Z" fill="#dbcaab" opacity=".8"/>
       <text data-el="pedido" x="187.5" y="232" text-anchor="middle" font-size="13.5"
             fill="#4a3a2c" font-weight="600"></text>
     </g>
@@ -4499,25 +4654,25 @@ LW.skins.rua = {
   montar(raiz, ctx) {
     const q = s => raiz.querySelector('[data-el="' + s + '"]');
     this.el = {
-      raiz, svg: raiz.querySelector('svg'), fala: q('fala'), pedido: q('pedido'),
+      raiz, fala: q('fala'), pedido: q('pedido'),
       sol: q('sol'), trilho: q('trilho'), rotuloDia: q('rotuloDia'),
       ator: q('ator'), flip: q('flip'), chama: q('chama'), halo: q('halo'),
       rosto: q('rosto'), boca: q('boca'), bolsa: q('bolsa'), moedaBolsa: q('moedaBolsa'),
-      vaso: q('vaso'), livros: q('livros'), tubo: q('tubo'), portao: q('portao'),
-      marcaA: q('marcaA'), marcaB: q('marcaB'), fundo: q('fundo'), frente: q('frente'),
-      fx: q('fx'),
+      vaso: q('vaso'), vasoEscala: q('vasoEscala'), livros: q('livros'), tubo: q('tubo'),
+      portao: q('portao'), marcaA: q('marcaA'), marcaB: q('marcaB'),
+      fundo: q('fundo'), frente: q('frente'), fx: q('fx'),
       figs: [q('fig1'), q('fig2'), q('fig3'), q('fig4')],
       livro: [1, 2, 3, 4, 5, 6].map(i => q('livro' + i)),
     };
     /* onde o personagem para em cada lugar: [x, y do pé, escala] */
     this.PARADA = {
-      rest: [31, 468, 0.62], help: [94, 468, 0.62], eat: [156, 468, 0.62],
-      work: [219, 468, 0.62], study: [281, 468, 0.62], leisure_a: [344, 468, 0.62],
-      leisure_b: [62, 694, 0.95], socialize: [176, 694, 0.95],
-      save: [266, 700, 0.95], withdraw: [340, 700, 0.95],
+      rest: [47, 468, 0.66], help: [86, 468, 0.66], eat: [156, 468, 0.66],
+      work: [222, 468, 0.66], study: [274, 468, 0.66], leisure_a: [341, 468, 0.66],
+      leisure_b: [34, 700, 0.98], socialize: [128, 704, 0.98],
+      save: [268, 706, 0.98], withdraw: [340, 706, 0.98],
     };
     this.onde = 'rest';
-    this.gosto = null;          // 'a' | 'b' | null — o que o mundo já mostrou
+    this.gosto = null;          // 'a' | 'b' | null — o que a rua já mostrou
     this.timers = [];
     this.escreverPedido(ctx.frase);
     if (ctx.reduzido) raiz.classList.add('parado');
@@ -4525,21 +4680,14 @@ LW.skins.rua = {
       + 'O sol mostra quanto do caminho já passou.';
   },
 
-  /* a faixa é de pano: o texto quebra em até duas linhas, sem sair da barra */
+  /* a faixa é de pano: o texto quebra em até duas linhas sem sair dela */
   escreverPedido(frase) {
     const alvo = this.el.pedido;
-    const MAX = 40;
-    if (frase.length <= MAX) {
-      alvo.setAttribute('font-size', '13.5');
-      alvo.textContent = frase;
-      return;
-    }
+    if (frase.length <= 40) { alvo.setAttribute('font-size', '13.5'); alvo.textContent = frase; return; }
     const palavras = frase.split(' ');
     const meio = Math.ceil(frase.length / 2);
     let linha1 = '', i = 0;
-    while (i < palavras.length && (linha1 + palavras[i]).length <= meio) {
-      linha1 += palavras[i] + ' '; i++;
-    }
+    while (i < palavras.length && (linha1 + palavras[i]).length <= meio) { linha1 += palavras[i] + ' '; i++; }
     const linha2 = palavras.slice(i).join(' ');
     alvo.setAttribute('font-size', '11.5');
     alvo.setAttribute('y', '227');
@@ -4564,7 +4712,7 @@ LW.skins.rua = {
     e.sol.setAttribute('transform', 'translate(' + sx.toFixed(1) + ',' + sy.toFixed(1) + ')');
     e.trilho.setAttribute('stroke-dasharray', (f * 1000).toFixed(0) + ' 9999');
     e.rotuloDia.setAttribute('x', lim(sx, 46, 330).toFixed(1));
-    e.rotuloDia.setAttribute('y', (sy - 30).toFixed(1));
+    e.rotuloDia.setAttribute('y', lim(sy - 30, 70, 178).toFixed(1));
     e.rotuloDia.textContent = 'dia ' + Math.min(estado.t + 1, ctx.HORIZON) + ' de ' + ctx.HORIZON;
 
     /* --- fôlego: a chama do lampião que ele carrega --- */
@@ -4591,7 +4739,7 @@ LW.skins.rua = {
 
     /* --- reserva: o tubo de vidro do banco enche --- */
     const re = pct(estado.savings, 0, 80) * 84;
-    e.tubo.setAttribute('y', (646 - re).toFixed(1));
+    e.tubo.setAttribute('y', (642 - re).toFixed(1));
     e.tubo.setAttribute('height', Math.max(0.5, re).toFixed(1));
 
     /* --- habilidade: a pilha de livros do curso --- */
@@ -4604,17 +4752,17 @@ LW.skins.rua = {
 
     /* --- bem-estar de outra pessoa: a planta da dona Ivone --- */
     const bw = pct(estado.other_welfare, 0, 100);
-    e.vaso.setAttribute('transform', 'translate(48,438) scale(' + (0.55 + bw * 0.75).toFixed(2) + ')');
-    e.vaso.setAttribute('opacity', (0.4 + bw * 0.6).toFixed(2));
+    e.vasoEscala.setAttribute('transform', 'translate(47,442) scale(' + (0.55 + bw * 0.75).toFixed(2) + ')');
+    e.vasoEscala.setAttribute('opacity', (0.4 + bw * 0.6).toFixed(2));
   },
 
-  /* o personagem anda até o lugar; as camadas de fundo e de frente
-     deslizam em velocidades diferentes e dão profundidade */
+  /* o personagem anda até o lugar; o fundo e o primeiro plano deslizam
+     em velocidades diferentes e dão profundidade */
   irPara(acao, ctx) {
     const e = this.el;
-    const [x, y, s] = this.PARADA[acao];
-    const [x0] = this.PARADA[this.onde] || [x];
-    const dist = Math.abs(x - x0) + (this.onde === acao ? 0 : 0);
+    const p = this.PARADA[acao], x = p[0], y = p[1], s = p[2];
+    const x0 = (this.PARADA[this.onde] || p)[0];
+    const dist = Math.abs(x - x0);
     const dur = ctx.reduzido ? 0 : Math.min(620, 220 + dist * 1.1);
 
     e.flip.style.transform = x < x0 - 1 ? 'scaleX(-1)' : 'scaleX(1)';
@@ -4640,15 +4788,16 @@ LW.skins.rua = {
 
   consequencia(info, ctx) {
     const e = this.el;
-    const [x, y] = this.PARADA[info.acao] || [187.5, 560];
-    const alto = y - 120;
+    const p = this.PARADA[info.acao] || [187.5, 620];
+    const x = p[0], y = p[1], alto = y - 110;
     const espera = ctx.reduzido ? 0 : (this.dur || 0);
+    const vez = (this.vez = (this.vez || 0) + 1);   // a legenda da última escolha é que vale
 
     if (info.gostou === true) this.gosto = info.acao === 'leisure_a' ? 'a' : 'b';
     if (info.gostou === false) this.gosto = info.acao === 'leisure_a' ? 'b' : 'a';
     this.marcarGosto();
 
-    let txt = '';
+    let txt;
     if (info.invalid) {
       txt = '<b>Não deu.</b> ' + (ctx.REQ_TXT[info.acao] || 'faltou o que era preciso')
         + '. O dia passou assim mesmo.';
@@ -4660,43 +4809,35 @@ LW.skins.rua = {
       else if (info.avisos.includes('energia_critica')) txt += ' Você está no limite.';
       else if (info.avisos.includes('divida')) txt += ' As contas estão te alcançando.';
     }
-    this.depois(() => { e.fala.innerHTML = txt; }, espera);
+    this.depois(() => { if (vez === this.vez) e.fala.innerHTML = txt; }, espera);
 
     if (ctx.reduzido) return;
 
     this.depois(() => {
-      if (info.invalid) {
-        this.voando(x, alto, 'está fechado pra você', '#ffd9c4');
-        return;
-      }
-      const cofreX = 302, cofreY = 600;
-      if (info.acao === 'work') {
-        for (let i = 0; i < 5; i++) this.moeda(x - 12 + i * 6, y - 40, x - 22, y - 46, i * 70);
-        this.voando(x + 26, alto + 10, 'ganhou o dia', '#ffd166');
-        const p = e.portao;
-        p.style.transition = 'transform 480ms ease';
-        p.style.transform = 'translateY(-22px)';
-        this.depois(() => { p.style.transform = 'translateY(0)'; }, 1400);
-      } else if (info.acao === 'eat') {
-        this.voando(x, alto, 'comida quente', '#9fd6a0');
-      } else if (info.acao === 'rest') {
-        this.voando(x, alto, 'dormiu bem', '#ffb648');
-      } else if (info.acao === 'study') {
-        this.pulsa(e.livros);
-        this.voando(x, alto, 'aprendeu algo', '#9dc0e8');
-      } else if (info.acao === 'socialize') {
-        this.voando(x, alto, 'gente boa por perto', '#e8b6d2');
-      } else if (info.acao === 'help') {
-        this.pulsa(e.vaso);
-        this.voando(x, alto, 'ela ficou melhor', '#9fd6a0');
-      } else if (info.acao === 'leisure_a' || info.acao === 'leisure_b') {
+      if (vez !== this.vez) return;
+      if (info.invalid) { this.voando(x, alto, 'está fechado pra você', '#ffd9c4'); return; }
+      const cofreX = 305, cofreY = 600;
+      const a = info.acao;
+      if (a === 'work') {
+        for (let i = 0; i < 5; i++) this.moeda(x - 12 + i * 6, y - 44, x - 20, y - 50, i * 70);
+        this.voando(x + 24, alto + 12, 'ganhou o dia', '#ffd166');
+        const g = e.portao;
+        g.style.transition = 'transform 480ms ease';
+        g.style.transform = 'translateY(-22px)';
+        this.depois(() => { g.style.transform = 'translateY(0)'; }, 1400);
+      } else if (a === 'eat') { this.voando(x, alto, 'comida quente', '#9fd6a0'); }
+      else if (a === 'rest') { this.voando(x, alto, 'dormiu bem', '#ffb648'); }
+      else if (a === 'study') { this.pulsa(e.livros); this.voando(x, alto, 'aprendeu algo', '#9dc0e8'); }
+      else if (a === 'socialize') { this.voando(x, alto, 'gente boa por perto', '#e8b6d2'); }
+      else if (a === 'help') { this.pulsa(e.vaso); this.voando(x, alto, 'ela ficou melhor', '#9fd6a0'); }
+      else if (a === 'leisure_a' || a === 'leisure_b') {
         this.voando(x, alto, info.gostou ? 'você adorou isso' : 'não era bem isso',
           info.gostou ? '#ffe08a' : '#b9b0c4');
         if (info.gostou) this.clarao();
-      } else if (info.acao === 'save') {
-        for (let i = 0; i < 4; i++) this.moeda(x - 20, y - 50, cofreX, cofreY, i * 80);
-      } else if (info.acao === 'withdraw') {
-        for (let i = 0; i < 4; i++) this.moeda(cofreX, cofreY, x - 20, y - 50, i * 80);
+      } else if (a === 'save') {
+        for (let i = 0; i < 4; i++) this.moeda(x - 18, y - 54, cofreX, cofreY, i * 80);
+      } else if (a === 'withdraw') {
+        for (let i = 0; i < 4; i++) this.moeda(cofreX, cofreY, x - 18, y - 54, i * 80);
       }
       if (info.avisos.length && navigator.vibrate) navigator.vibrate(18);
     }, espera);
@@ -4704,13 +4845,14 @@ LW.skins.rua = {
 
   evento(tipo, ctx) {
     const e = this.el;
+    this.vez = (this.vez || 0) + 1;
     if (tipo === 'crise') {
       e.raiz.classList.add('crise');
       e.fala.innerHTML = '<b>A crise chegou na rua.</b> Sumiram 12 do seu bolso, '
         + 'e daqui pra frente tudo custa mais.';
       if (ctx.reduzido) return;
       this.clarao();
-      for (let i = 0; i < 6; i++) this.moeda(150 + i * 8, 560, 190 + (i - 3) * 60, 300, i * 60, '#c9b39a');
+      for (let i = 0; i < 6; i++) this.moeda(160 + i * 8, 600, 60 + i * 55, 300, i * 60, '#cbb6a0');
       e.raiz.querySelectorAll('[data-acao]').forEach((l, i) => {
         this.depois(() => {
           l.classList.remove('treme'); void l.getBoundingClientRect(); l.classList.add('treme');
@@ -4725,7 +4867,7 @@ LW.skins.rua = {
         + 'e você ainda não sabe o que dá.';
       if (ctx.reduzido) return;
       this.voando(344, 330, '?', '#ffe08a');
-      this.voando(60, 560, '?', '#ffe08a');
+      this.voando(66, 560, '?', '#ffe08a');
       if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
     }
   },
@@ -4740,14 +4882,17 @@ LW.skins.rua = {
   },
 
   marcarGosto() {
-    const e = this.el;
     const marca = (el, ehEsse) => {
-      if (this.gosto === null) { el.textContent = '?'; el.setAttribute('opacity', '.9'); el.setAttribute('fill', '#ffe08a'); }
-      else if (ehEsse) { el.textContent = '★'; el.setAttribute('opacity', '1'); el.setAttribute('fill', '#ffe08a'); }
-      else { el.textContent = '·'; el.setAttribute('opacity', '.45'); el.setAttribute('fill', '#cfc4b4'); }
+      if (this.gosto === null) {
+        el.textContent = '?'; el.setAttribute('opacity', '.9'); el.setAttribute('fill', '#ffe08a');
+      } else if (ehEsse) {
+        el.textContent = '★'; el.setAttribute('opacity', '1'); el.setAttribute('fill', '#ffe08a');
+      } else {
+        el.textContent = '·'; el.setAttribute('opacity', '.45'); el.setAttribute('fill', '#cfc4b4');
+      }
     };
-    marca(e.marcaA, this.gosto === 'a');
-    marca(e.marcaB, this.gosto === 'b');
+    marca(this.el.marcaA, this.gosto === 'a');
+    marca(this.el.marcaB, this.gosto === 'b');
   },
 
   depois(fn, ms) {
