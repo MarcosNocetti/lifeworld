@@ -136,6 +136,17 @@
   .status.ok { color: var(--ok); } .status.err { color: var(--danger); }
   .btnrow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 
+  /* tabela de acoes do briefing */
+  table.acoes-brief { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  table.acoes-brief td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.acoes-brief td.n { font-weight: 700; color: var(--ink); white-space: nowrap; width: 1%; }
+  table.acoes-brief td.g { color: var(--ok); }
+  table.acoes-brief td.p { color: var(--danger); }
+  @media (max-width: 520px) {
+    table.acoes-brief td { display: block; border-bottom: 0; padding: 2px 0; }
+    table.acoes-brief tr { display: block; border-bottom: 1px solid var(--line); padding: 7px 0; }
+  }
+
 </style>
 
 <div class="wrap">
@@ -233,13 +244,18 @@
       <div class="defs">
         <div class="def"><b>Saúde</b> <span>0 a 100. Se chegar a zero, o episódio acaba ali.</span></div>
         <div class="def"><b>Energia</b> <span>0 a 100. Abaixo de 15, você perde saúde a cada passo.</span></div>
-        <div class="def"><b>Felicidade</b> <span>0 a 100. Cai um pouco a cada passo, por si só.</span></div>
-        <div class="def"><b>Caixa</b> <span>−50 a 180. Abaixo de −15, você perde saúde e felicidade.</span></div>
-        <div class="def"><b>Reserva</b> <span>Dinheiro guardado. Só entra e sai em blocos de 8.</span></div>
+        <div class="def"><b>Ânimo</b> <span>0 a 100. Cai um pouco a cada passo, por si só.</span></div>
+        <div class="def"><b>Dinheiro</b> <span>−50 a 180. Abaixo de −15, você perde saúde e ânimo.</span></div>
+        <div class="def"><b>Poupado</b> <span>Dinheiro guardado. Só entra e sai em blocos de 8.</span></div>
         <div class="def"><b>Habilidade</b> <span>0 a 100. Aumenta o quanto você ganha trabalhando.</span></div>
-        <div class="def"><b>Capital social</b> <span>0 a 100. Sobe ao socializar e ajudar.</span></div>
-        <div class="def"><b>Bem-estar de outra pessoa</b> <span>0 a 100. Sobe quando você ajuda.</span></div>
+        <div class="def"><b>Amizades</b> <span>0 a 100. Sobe ao socializar e ajudar.</span></div>
+        <div class="def"><b>Outra pessoa</b> <span>0 a 100. Sobe quando você ajuda.</span></div>
       </div>
+      <div class="kicker" style="margin-top: 20px;">O que cada escolha faz</div>
+      <p style="font-size: 13.5px; margin-top: 4px;">São sempre estas dez, e cada uma gasta um dos
+      seus 50 passos. Durante o jogo, toque e segure numa coisa para rever isto com os números exatos.</p>
+      <table class="acoes-brief" id="briefAcoes"></table>
+
       <p style="margin-top: 14px; font-size: 13.5px;" id="briefRegime"></p>
       <div class="btnrow"><button class="cta" id="btnPlay">Começar minha vida</button></div>
     </div>
@@ -403,17 +419,34 @@ const REGIMES = {
   preference_shift: "Mundo com mudança de gosto: no passo 25, a atividade de lazer que você prefere muda — e volta a ser desconhecida.",
 };
 const ACOES_PT = {
-  work:      { nome: "Trabalhar",     desc: "ganha dinheiro conforme sua habilidade; custa energia, ânimo e um pouco de saúde" },
-  study:     { nome: "Estudar",       desc: "custa 2 e energia; aumenta habilidade — trabalhos futuros rendem mais" },
-  rest:      { nome: "Descansar",     desc: "recupera muita energia, um pouco de saúde e ânimo; não custa nada" },
-  eat:       { nome: "Alimentar-se",  desc: "custa 4; recupera energia, saúde e ânimo" },
-  leisure_a: { nome: "Lazer A",       desc: "custa 3; o ânimo que dá depende de você gostar dessa atividade" },
-  leisure_b: { nome: "Lazer B",       desc: "custa 3; o ânimo que dá depende de você gostar dessa atividade" },
-  socialize: { nome: "Socializar",    desc: "custa 2; sobe ânimo e capital social" },
-  help:      { nome: "Ajudar alguém", desc: "custa 3 e energia; sobe o bem-estar de outra pessoa, seu ânimo e seu capital social" },
-  save:      { nome: "Poupar",        desc: "move 8 do caixa para a reserva (precisa de 10 em caixa)" },
-  withdraw:  { nome: "Sacar",         desc: "traz 8 da reserva de volta ao caixa" },
+  work:      { nome: "Trabalhar",      desc: "ganha dinheiro conforme sua habilidade; custa energia, ânimo e um pouco de saúde" },
+  study:     { nome: "Estudar",        desc: "custa 2 e energia; aumenta habilidade — trabalhos futuros rendem mais" },
+  rest:      { nome: "Descansar",      desc: "recupera muita energia, um pouco de saúde e ânimo; não custa nada" },
+  eat:       { nome: "Comer",          desc: "custa 4; recupera energia, saúde e ânimo" },
+  leisure_a: { nome: "Lazer A",        desc: "custa 3 e energia; o ânimo que dá depende de você gostar dessa atividade" },
+  leisure_b: { nome: "Lazer B",        desc: "custa 3 e energia; o ânimo que dá depende de você gostar dessa atividade" },
+  socialize: { nome: "Socializar",     desc: "custa 2 e energia; sobe ânimo e amizades" },
+  help:      { nome: "Ajudar alguém",  desc: "custa 3 e energia; sobe o bem-estar de outra pessoa, seu ânimo e suas amizades" },
+  save:      { nome: "Guardar 8",      desc: "move 8 do dinheiro para o poupado (precisa de 10 no bolso)" },
+  withdraw:  { nome: "Pegar 8",        desc: "traz 8 do poupado de volta para o bolso" },
 };
+
+/* Resumo de ganho/perda, na mesma palavra em TODAS as peles. A pele desenha o
+   mundo; o nome e o efeito da acao sao do nucleo — se cada arte nomear a mesma
+   acao de um jeito, a palavra vira confundidor do proprio experimento.      */
+const ACOES_EFEITO = {
+  work:      { ganha: "dinheiro (mais se tiver prática)", perde: "energia, ânimo e um pouco de saúde" },
+  study:     { ganha: "habilidade — trabalhar rende mais depois", perde: "2 de dinheiro e energia" },
+  rest:      { ganha: "energia, saúde e ânimo", perde: "nada" },
+  eat:       { ganha: "energia, saúde e ânimo", perde: "4 de dinheiro" },
+  leisure_a: { ganha: "ânimo (quanto, depende de você gostar)", perde: "3 de dinheiro e energia" },
+  leisure_b: { ganha: "ânimo (quanto, depende de você gostar)", perde: "3 de dinheiro e energia" },
+  socialize: { ganha: "ânimo e amizades", perde: "2 de dinheiro e energia" },
+  help:      { ganha: "bem-estar da outra pessoa, ânimo e amizades", perde: "3 de dinheiro e energia" },
+  save:      { ganha: "8 no poupado", perde: "8 do bolso" },
+  withdraw:  { ganha: "8 no bolso", perde: "8 do poupado" },
+};
+
 const REQS = {
   work: s => s.energy >= 10 && s.health >= 5, study: s => s.cash >= 2 && s.energy >= 8,
   rest: () => true, eat: s => s.cash >= 4, leisure_a: s => s.cash >= 3 && s.energy >= 3,
@@ -429,11 +462,11 @@ const REQ_TXT = {
 const VITAIS = [
   { k: "health", nome: "Saúde", cor: "var(--vital-health)", lo: 0, hi: 100 },
   { k: "energy", nome: "Energia", cor: "var(--vital-energy)", lo: 0, hi: 100 },
-  { k: "happiness", nome: "Felicidade", cor: "var(--vital-happy)", lo: 0, hi: 100 },
-  { k: "cash", nome: "Caixa", cor: "var(--vital-cash)", lo: -50, hi: 180 },
-  { k: "savings", nome: "Reserva", cor: "#7fb2c9", lo: 0, hi: 80 },
-  { k: "other_welfare", nome: "Bem-estar de outra pessoa", cor: "#c98fb0", lo: 0, hi: 100 },
-  { k: "social", nome: "Capital social", cor: "#8fa8c9", lo: 0, hi: 100 },
+  { k: "happiness", nome: "Ânimo", cor: "var(--vital-happy)", lo: 0, hi: 100 },
+  { k: "cash", nome: "Dinheiro", cor: "var(--vital-cash)", lo: -50, hi: 180 },
+  { k: "savings", nome: "Poupado", cor: "#7fb2c9", lo: 0, hi: 80 },
+  { k: "other_welfare", nome: "Outra pessoa", cor: "#c98fb0", lo: 0, hi: 100 },
+  { k: "social", nome: "Amizades", cor: "#8fa8c9", lo: 0, hi: 100 },
   { k: "skill", nome: "Habilidade", cor: "#9db98f", lo: 0, hi: 100 },
 ];
 const HORIZON = 50, CRISIS_AT = 25;
@@ -523,6 +556,11 @@ $('btnStart').addEventListener('click', async () => {
 
   registrarEvento('consentiu');   // sem isto, quem abandona não deixa rastro
 
+  $('briefAcoes').innerHTML = ACTIONS.map(a => `<tr>
+    <td class="n">${ACOES_PT[a].nome}</td>
+    <td class="g">ganha ${ACOES_EFEITO[a].ganha}</td>
+    <td class="p">custa ${ACOES_EFEITO[a].perde}</td></tr>`).join('');
+
   $('briefMissao').textContent = '“' + FAMILIAS[S.familia].frase + '”';
   $('briefRegime').innerHTML = '<strong>Onde você vai viver:</strong> ' + REGIMES[S.regime];
   troca('scConsent', 'scBrief');
@@ -607,6 +645,14 @@ function ligarAcoes(raiz) {
     if (!el.hasAttribute('role') && el.tagName !== 'BUTTON') el.setAttribute('role', 'button');
     if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', ACOES_PT[acao].nome);
     el.addEventListener('click', () => tentar(acao, el));
+    // ver antes de confirmar: segurar/passar o mouse/focar mostra a ficha
+    el.addEventListener('pointerdown', () => mostrarFicha(acao, el));
+    el.addEventListener('pointerenter', () => mostrarFicha(acao, el));
+    el.addEventListener('pointerup', esconderFicha);
+    el.addEventListener('pointerleave', esconderFicha);
+    el.addEventListener('pointercancel', esconderFicha);
+    el.addEventListener('focus', () => mostrarFicha(acao, el));
+    el.addEventListener('blur', esconderFicha);
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tentar(acao, el); }
     });
@@ -638,6 +684,8 @@ function jogar(acao) {
   S.estado = r.state; S.pref = r.preference;
   S.traj.push({ ...r.state });
   S.acoes.push(acao); S.tempos.push(dt);
+  S.passosDados = (S.passosDados || 0) + 1;
+  esconderFicha();
   if (r.invalid) S.invalidos++;
   if (r.event) S.eventos.push({ t: anterior.t, evento: r.event });
 
@@ -672,6 +720,49 @@ function jogar(acao) {
 
   if (S.estado.t >= HORIZON || !alive(S.estado)) return finalizar();
   atualizarDisponibilidade(S.ctx.raiz);
+}
+
+/* Previsao exata do passo, sem revelar surpresa: crise desligada (crisisAt -1)
+   e preferencia como desconhecida, senao a ficha entregaria qual lazer voce
+   gosta — que o desenho quer manter oculto.                                 */
+function preverAcao(acao) {
+  const r = stepWorld({ ...S.estado }, acao, S.regime, 'desconhecida', -1);
+  const d = {};
+  for (const v of VITAIS) {
+    const x = r.state[v.k] - S.estado[v.k];
+    if (Math.abs(x) > 0.05) d[v.k] = x;
+  }
+  return d;
+}
+
+function mostrarFicha(acao, el) {
+  if (!S.ficha) return;
+  const ef = ACOES_EFEITO[acao] || {};
+  const bloqueado = el && el.getAttribute('aria-disabled') === 'true';
+  const d = bloqueado ? null : preverAcao(acao);
+  const incerto = acao === 'leisure_a' || acao === 'leisure_b';
+
+  let numeros = '';
+  if (d) {
+    numeros = VITAIS.filter(v => d[v.k] !== undefined).map(v => {
+      const x = d[v.k];
+      const oculto = incerto && v.k === 'happiness';
+      return `<i class="${x > 0 ? 'mais' : 'menos'}">${RAIL_CURTO[v.k]} ${oculto ? '+?' : (x > 0 ? '+' : '−') + fmt(Math.abs(x))}</i>`;
+    }).join('');
+  }
+
+  S.ficha.innerHTML = `<div class="nom">${ACOES_PT[acao].nome}</div>
+    <div class="par g"><b>ganha</b><span>${ef.ganha || '—'}</span></div>
+    <div class="par p"><b>custa</b><span>${ef.perde || '—'}</span></div>
+    ${numeros ? `<div class="num">${numeros}</div>` : ''}
+    ${bloqueado ? `<div class="aviso">Hoje não dá: ${REQ_TXT[acao]}.</div>` : ''}`;
+  S.ficha.classList.add('on');
+  if (S.dica) S.dica.style.display = 'none';
+}
+
+function esconderFicha() {
+  if (S.ficha) S.ficha.classList.remove('on');
+  if (S.dica && S.passosDados < 3) S.dica.style.display = '';
 }
 
 /* ---------- painel lateral de estado (igual nas 5 peles) ----------
@@ -723,6 +814,30 @@ const RAIL_CSS = `
 }
 @keyframes lwGira { 0%,45%,100% { transform: rotate(0) } 60%,85% { transform: rotate(-90deg) } }
 @media (prefers-reduced-motion: reduce) { #lwGire svg { animation: none; } }
+/* Ficha da acao: o que voce GANHA e o que PERDE, antes de confirmar. Aparece
+   ao passar o dedo/mouse ou focar. Mostra os numeros EXATOS previstos — o
+   planejador da IA simula essas transicoes para decidir, entao dar a mesma
+   informacao ao humano reduz assimetria; nada aqui revela a nota do objetivo. */
+#lwFicha { position: absolute; left: 8px; right: 72px; bottom: 8px; z-index: 45;
+  background: rgba(12,10,20,.94); border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+  padding: 10px 12px; pointer-events: none; opacity: 0; transform: translateY(8px);
+  transition: opacity .14s, transform .14s;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+#lwFicha.on { opacity: 1; transform: none; }
+#lwFicha .nom { font-size: 15px; font-weight: 700; color: #f3eefb; }
+#lwFicha .par { display: flex; gap: 10px; margin-top: 5px; font-size: 12.5px; line-height: 1.3; }
+#lwFicha .par b { flex: 0 0 auto; font-weight: 700; }
+#lwFicha .g b { color: #46d39a; } #lwFicha .p b { color: #ff8f86; }
+#lwFicha .par span { color: #c6bdd6; }
+#lwFicha .num { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 12px; font-variant-numeric: tabular-nums; color: #a79dba; }
+#lwFicha .num i { font-style: normal; }
+#lwFicha .num i.mais { color: #46d39a; } #lwFicha .num i.menos { color: #ff8f86; }
+#lwFicha .aviso { margin-top: 5px; font-size: 12px; color: #ffb35c; }
+#lwDica { position: absolute; left: 8px; right: 72px; bottom: 8px; z-index: 44;
+  text-align: center; font-size: 12.5px; color: #b3a9c6; pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+@media (prefers-reduced-motion: reduce) { #lwFicha { transition: none; } }
 /* a cena recua: o painel ocupa faixa propria em vez de cobrir a arte */
 #scGame[class*="sk-"] { right: 64px; }
 #lwRail { position: absolute; top: 0; right: 0; bottom: 0; width: 64px; z-index: 40;
@@ -775,7 +890,18 @@ function montarRail(raiz) {
       <span class="lwb"><i style="background:${v.cor}"></i></span>
       <span class="lwd"></span>
     </div>`).join('');
-  ($('lwPalco') || raiz.parentNode || raiz).appendChild(rail);   // irmao da cena, na faixa liberada
+  const casa = $('lwPalco') || raiz.parentNode || raiz;
+  casa.appendChild(rail);   // irmao da cena, na faixa liberada
+
+  const dica = document.createElement('div');
+  dica.id = 'lwDica';
+  dica.textContent = 'Toque e segure numa coisa para ver o que ela faz.';
+  casa.appendChild(dica);
+
+  const ficha = document.createElement('div');
+  ficha.id = 'lwFicha';
+  casa.appendChild(ficha);
+  S.ficha = ficha; S.dica = dica;
   S.rail = rail;
 }
 
@@ -1051,10 +1177,15 @@ LW.skins.corpo = {
     background: rgba(224,164,74,.18); border-color: #e0a44a; }
   .sk-corpo .alvo:focus-visible .disco { box-shadow: 0 0 0 3px rgba(224,164,74,.45); }
   .sk-corpo .alvo:hover b, .sk-corpo .alvo:focus-visible b { color: #f6f0ff; }
-  .sk-corpo .alvo.indisponivel { opacity: .34; cursor: not-allowed; }
+  /* Indisponível apaga o DISCO, não o nome: a palavra canônica é o que o estudo
+     mede, então ela continua legível mesmo quando a ação não dá. */
+  .sk-corpo .alvo.indisponivel { cursor: not-allowed; }
+  .sk-corpo .alvo.indisponivel .disco { opacity: .3; }
+  .sk-corpo .alvo.indisponivel b { color: #8d84a1; }
   .sk-corpo .alvo.indisponivel:hover { transform: translate(-50%,-50%); }
   .sk-corpo .alvo.indisponivel:hover .disco { background: rgba(255,255,255,.05);
     border-color: rgba(255,255,255,.11); }
+  .sk-corpo .alvo.indisponivel:hover b, .sk-corpo .alvo.indisponivel:focus-visible b { color: #8d84a1; }
 
   .sk-corpo .fala { flex: 0 0 auto; min-height: 3em; padding: 2px 16px 0; text-align: center;
     font-size: 13.5px; line-height: 1.35; color: #b7aec9; }
@@ -1138,13 +1269,11 @@ LW.skins.corpo = {
       save: '<path d="M12 3v8"/><path d="M8.4 7.6L12 11.2l3.6-3.6"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>',
       withdraw: '<path d="M12 11.2V3"/><path d="M8.4 6.6L12 3l3.6 3.6"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>',
     };
-    // Rótulo curto: cabe numa linha dentro do alvo mesmo num celular de 320px.
-    // O nome completo continua no aria-label e no title (o núcleo põe).
-    const ROTULO = {
-      work: 'Trabalhar', study: 'Estudar', rest: 'Descansar', eat: 'Comer',
-      leisure_a: 'Lazer A', leisure_b: 'Lazer B', socialize: 'Socializar',
-      help: 'Ajudar', save: 'Poupar', withdraw: 'Sacar',
-    };
+    // O rótulo é o NOME CANÔNICO, sempre visível e igual em todas as artes —
+    // se cada pele batizasse a mesma ação de um jeito, a palavra viraria
+    // confundidor do que o estudo mede. Vem de ctx.ACOES_PT, não de uma cópia
+    // local: assim não há como as duas listas se separarem com o tempo.
+    const rotulo = a => ctx.ACOES_PT[a].nome;
     // A órbita: três pares nas laterais (deixam a figura livre no meio) e uma
     // fileira de quatro embaixo. x vem das âncoras da .orbita; y é % da órbita.
     const POS = {
@@ -1159,7 +1288,7 @@ LW.skins.corpo = {
       return `<div class="alvo" data-acao="${a}" style="--x:var(${x});--y:${y}">
         <span class="disco"><svg viewBox="0 0 24 24" fill="none" stroke="#e6dcf2" stroke-width="1.6"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[a]}</svg></span>
-        <b>${ROTULO[a] || ctx.ACOES_PT[a].nome}</b></div>`;
+        <b>${rotulo(a)}</b></div>`;
     }).join(''));
   },
 
@@ -1232,8 +1361,10 @@ LW.skins.corpo = {
    Não há painel e não há personagem: há objetos de verdade em cima da madeira, e são
    eles que carregam o estado (a carteira engorda, a caneca esvazia, a planta murcha,
    a foto desbota, a vela queima). O pedido é um post-it colado na mesa.
-   Nada de rótulo permanente flutuando sobre a madeira: o nome do gesto só aparece a
-   lápis, num canto limpo do tampo, quando você encosta no objeto. */
+   Cada objeto tem a sua etiqueta colada no pé, com o nome do gesto — a mesma palavra
+   que as outras artes usam, vinda do núcleo, sempre à vista. No celular o dedo quase
+   nunca "passa por cima", então nome escondido atrás de toque é nome que não existe.
+   O bilhete a lápis continua, mas só para o que muda: o motivo de hoje não dar. */
 
 LW.skins.mesa = {
   id: 'mesa',
@@ -1310,6 +1441,17 @@ LW.skins.mesa = {
   .sk-mesa .dica.ver { opacity: 1; }
   .sk-mesa .escuro { opacity: 0; transition: opacity .35s; pointer-events: none; }
   .sk-mesa .escuro.ver { opacity: .6; }
+
+  /* ---------- a etiqueta de cada objeto: o nome do gesto, sempre à vista ----------
+     Fica colada no pé do objeto, meio torta, como etiqueta de gaveta. A tarja
+     escura é o que garante ler tanto sobre a madeira quanto sobre a louça branca;
+     o contorno na letra segura o resto. Nunca some: é a palavra que o estudo mede. */
+  .sk-mesa .etq { pointer-events: none; }
+  .sk-mesa .etq .fita { fill: rgba(10,6,3,.72); stroke: rgba(247,231,198,.28); stroke-width: 1; }
+  .sk-mesa .etq .nome { font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+    font-size: 14px; font-weight: 600; letter-spacing: .01em; fill: #f8e9cc;
+    paint-order: stroke fill; stroke: rgba(7,4,1,.92); stroke-width: 2.6px;
+    stroke-linejoin: round; }
 
   /* ---------- a folha de papel com os números (o núcleo preenche) ---------- */
   .sk-mesa .ficha { position: absolute; left: 3.4%; right: 3.4%; bottom: 2.2%;
@@ -1630,7 +1772,7 @@ LW.skins.mesa = {
           <rect x="240" y="378" width="14" height="17" rx="2.5" fill="#6a6a6a"/>
         </g>
       </g>
-      <g transform="rotate(-19 168 410)" filter="url(#m-sombrinha)">
+      <g transform="translate(-18 14) rotate(-19 168 410)" filter="url(#m-sombrinha)">
         <rect x="118" y="406" width="88" height="8.5" rx="4.2" fill="#20303f"/>
         <rect x="118" y="406" width="88" height="3" rx="1.5" fill="#516475"/>
         <path d="M206 406 l15 4.2 l-15 4.3 z" fill="#cfbe94"/>
@@ -1642,9 +1784,9 @@ LW.skins.mesa = {
 
   <!-- ===== O CELULAR — conversar ===== -->
   <g class="obj" data-acao="socialize">
-    <rect class="anel" x="266" y="306" width="96" height="128" rx="12"/>
-    <rect x="266" y="306" width="96" height="128" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(13 -126)">
+    <rect class="anel" x="266" y="316" width="96" height="128" rx="12"/>
+    <rect x="266" y="316" width="96" height="128" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(13 -116)">
       <g transform="rotate(-11 300 496)" filter="url(#m-sombra)">
         <rect x="268" y="440" width="62" height="112" rx="11" fill="#2c2821"/>
         <rect x="271" y="443" width="56" height="106" rx="9" fill="url(#m-tela)"/>
@@ -1664,9 +1806,9 @@ LW.skins.mesa = {
 
   <!-- ===== O PRATO — comer ===== -->
   <g class="obj" data-acao="eat">
-    <rect class="anel" x="4" y="478" width="124" height="106" rx="12"/>
-    <rect x="4" y="478" width="124" height="106" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(0 10) rotate(-2 54 522)">
+    <rect class="anel" x="4" y="490" width="124" height="106" rx="12"/>
+    <rect x="4" y="490" width="124" height="106" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(0 22) rotate(-2 54 522)">
       <ellipse cx="56" cy="536" rx="47" ry="17" fill="#150c05" opacity=".5"/>
       <g filter="url(#m-sombra)">
         <circle cx="54" cy="520" r="43" fill="#f6f0e4"/>
@@ -1731,9 +1873,9 @@ LW.skins.mesa = {
 
   <!-- ===== A VITROLA — ouvir um disco (lazer A) ===== -->
   <g class="obj" data-acao="leisure_a">
-    <rect class="anel" x="252" y="432" width="118" height="110" rx="12"/>
-    <rect x="252" y="432" width="118" height="110" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(9 262) rotate(4 300 218)">
+    <rect class="anel" x="252" y="458" width="118" height="110" rx="12"/>
+    <rect x="252" y="458" width="118" height="110" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(9 288) rotate(4 300 218)">
       <ellipse cx="302" cy="256" rx="50" ry="17" fill="#150c05" opacity=".5"/>
       <g filter="url(#m-sombra)">
         <rect x="250" y="176" width="102" height="84" rx="9" fill="#63452c"/>
@@ -1754,16 +1896,16 @@ LW.skins.mesa = {
       </g>
     </g></g>
     <g data-el="gostoA" opacity="0" fill="none" stroke="#ffe0a6" stroke-width="1.6" stroke-linecap="round">
-      <path d="M262 448 v-11 l9 -3 v11"/><circle cx="259.5" cy="448" r="2.6" fill="#ffe0a6" stroke="none"/>
-      <circle cx="268.5" cy="445" r="2.6" fill="#ffe0a6" stroke="none"/>
+      <path d="M262 474 v-11 l9 -3 v11"/><circle cx="259.5" cy="474" r="2.6" fill="#ffe0a6" stroke="none"/>
+      <circle cx="268.5" cy="471" r="2.6" fill="#ffe0a6" stroke="none"/>
     </g>
   </g>
 
   <!-- ===== O VIOLÃO — tocar um pouco (lazer B) ===== -->
   <g class="obj" data-acao="leisure_b">
-    <rect class="anel" x="262" y="544" width="108" height="158" rx="12"/>
-    <rect x="262" y="544" width="108" height="158" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(318 638) rotate(-14) scale(.56)">
+    <rect class="anel" x="262" y="588" width="108" height="160" rx="12"/>
+    <rect x="262" y="588" width="108" height="160" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(322 700) rotate(-14) scale(.56)">
       <ellipse cx="6" cy="78" rx="52" ry="26" fill="#150c05" opacity=".45"/>
       <g filter="url(#m-sombra)">
         <path d="M0 -166 h0 c 4 0 7 3 7 7 v96 h-14 v-96 c 0 -4 3 -7 7 -7z" fill="#5a3a1e"/>
@@ -1792,16 +1934,16 @@ LW.skins.mesa = {
       </g>
     </g></g>
     <g data-el="gostoB" opacity="0" fill="none" stroke="#ffe0a6" stroke-width="1.6" stroke-linecap="round">
-      <path d="M270 560 v-11 l9 -3 v11"/><circle cx="267.5" cy="560" r="2.6" fill="#ffe0a6" stroke="none"/>
-      <circle cx="276.5" cy="557" r="2.6" fill="#ffe0a6" stroke="none"/>
+      <path d="M270 604 v-11 l9 -3 v11"/><circle cx="267.5" cy="604" r="2.6" fill="#ffe0a6" stroke="none"/>
+      <circle cx="276.5" cy="601" r="2.6" fill="#ffe0a6" stroke="none"/>
     </g>
   </g>
 
   <!-- ===== A CARTEIRA — pegar de volta (sacar) ===== -->
   <g class="obj" data-acao="withdraw">
-    <rect class="anel" x="0" y="578" width="152" height="100" rx="12"/>
-    <rect x="0" y="578" width="152" height="100" fill="none" pointer-events="all"/>
-    <g class="anim"><g data-el="carteira" transform="translate(76 628) scale(.78) translate(-77 -742)">
+    <rect class="anel" x="0" y="594" width="152" height="100" rx="12"/>
+    <rect x="0" y="594" width="152" height="100" fill="none" pointer-events="all"/>
+    <g class="anim"><g data-el="carteira" transform="translate(76 644) scale(.78) translate(-77 -742)">
       <g data-el="notas">
         <g transform="rotate(-12 86 700)"><rect x="38" y="684" width="90" height="42" rx="3" fill="url(#m-nota)"/>
           <rect x="38" y="684" width="90" height="42" rx="3" fill="none" stroke="#7c9a6d" stroke-width=".8"/></g>
@@ -1831,9 +1973,9 @@ LW.skins.mesa = {
 
   <!-- ===== O POTE — guardar (poupar) ===== -->
   <g class="obj" data-acao="save">
-    <rect class="anel" x="156" y="582" width="82" height="94" rx="12"/>
-    <rect x="156" y="582" width="82" height="94" fill="none" pointer-events="all"/>
-    <g class="anim"><g transform="translate(196 628) scale(.88) translate(-288 -733) rotate(2 288 740)">
+    <rect class="anel" x="156" y="594" width="82" height="94" rx="12"/>
+    <rect x="156" y="594" width="82" height="94" fill="none" pointer-events="all"/>
+    <g class="anim"><g transform="translate(196 640) scale(.88) translate(-288 -733) rotate(2 288 740)">
       <ellipse cx="288" cy="778" rx="44" ry="14" fill="#0f0803" opacity=".55"/>
       <g filter="url(#m-sombra)">
         <path d="M252 704 h72 v58 a36 13 0 0 1 -72 0z" fill="url(#m-vidro)"/>
@@ -1860,9 +2002,9 @@ LW.skins.mesa = {
   </g>
 
   <!-- da carteira para o pote: o caminho do dinheiro guardado -->
-  <path d="M132 604 q22 -14 44 -4" stroke="#f6e2bd" stroke-width="1.2" fill="none"
+  <path d="M132 618 q22 -14 44 -4" stroke="#f6e2bd" stroke-width="1.2" fill="none"
         opacity=".26" stroke-dasharray="3 4"/>
-  <path d="M176 600 l-8 -2 l5 6z" fill="#f6e2bd" opacity=".26"/>
+  <path d="M176 614 l-8 -2 l5 6z" fill="#f6e2bd" opacity=".26"/>
 
   <!-- ===== a conta que chega ===== -->
   <g data-el="conta" opacity="0">
@@ -1889,6 +2031,44 @@ LW.skins.mesa = {
   <rect data-el="beira" x="0" y="794" width="375" height="18" fill="url(#m-beira)"/>
   <rect data-el="beiraLuz" x="0" y="794" width="375" height="1.8" fill="#a67a4e" opacity=".5"/>
   <rect class="cheio" width="375" height="812" filter="url(#m-grao)" opacity=".6" pointer-events="none"/>
+
+  <!-- ===== as etiquetas: cada objeto diz o nome do gesto, o tempo todo =====
+       Ficam por cima do grão e da vinheta para não perderem contraste no canto
+       escuro da mesa. A largura de cada tarja é medida no montar(), pela letra
+       que o aparelho realmente desenhou. -->
+  <g data-el="rotulos" pointer-events="none">
+    <g class="etq" data-etq="work" transform="translate(66 461) rotate(-2)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Trabalhar</text></g>
+    <g class="etq" data-etq="study" transform="translate(186 417) rotate(1.5)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Estudar</text></g>
+    <g class="etq" data-etq="rest" transform="translate(307 296) rotate(-1.5)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Descansar</text></g>
+    <g class="etq" data-etq="socialize" transform="translate(312 439) rotate(-2)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Socializar</text></g>
+    <g class="etq" data-etq="eat" transform="translate(60 581) rotate(2)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Comer</text></g>
+    <g class="etq" data-etq="help" transform="translate(186 579) rotate(-1)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Ajudar alguém</text></g>
+    <g class="etq" data-etq="leisure_a" transform="translate(308 555) rotate(2)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Lazer A</text></g>
+    <g class="etq" data-etq="leisure_b" transform="translate(322 738) rotate(-2)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Lazer B</text></g>
+    <g class="etq" data-etq="withdraw" transform="translate(72 685) rotate(1.5)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Pegar 8</text></g>
+    <g class="etq" data-etq="save" transform="translate(197 687) rotate(-1.5)">
+      <rect class="fita" filter="url(#m-sombrinha)"/><text class="nome" x="0" y="4.9"
+        text-anchor="middle">Guardar 8</text></g>
+  </g>
+
   <rect class="escuro cheio" data-el="escuro" width="375" height="812" fill="#050302"/>
   </g>
   </svg>
@@ -1932,6 +2112,22 @@ LW.skins.mesa = {
     // a folha de números não existe quando o participante joga sem números
     if (ctx.legibilidade === 'diegetico') this.el.ficha.style.display = 'none';
 
+    // as etiquetas: o nome vem do núcleo (a mesma palavra em toda arte) e a tarja
+    // é cortada em cima da letra que ESTE aparelho desenhou, não de uma medida
+    // chutada — fonte diferente, tarja diferente, e o nome nunca vaza para fora.
+    raiz.querySelectorAll('.etq').forEach(g => {
+      const nome = g.querySelector('.nome');
+      const canonico = (ctx.ACOES_PT[g.dataset.etq] || {}).nome;
+      if (canonico) nome.textContent = canonico;
+      const b = this.medir(nome);
+      const fita = g.querySelector('.fita');
+      fita.setAttribute('x', (b.x - 7).toFixed(1));
+      fita.setAttribute('y', (b.y - 3.6).toFixed(1));
+      fita.setAttribute('width', (b.width + 14).toFixed(1));
+      fita.setAttribute('height', (b.height + 7.2).toFixed(1));
+      fita.setAttribute('rx', '4.5');
+    });
+
     // o nome do gesto só aparece quando o dedo (ou o foco) encosta no objeto
     raiz.querySelectorAll('[data-acao]').forEach(g => {
       const mostra = () => this.dizer(g.dataset.acao);
@@ -1943,10 +2139,23 @@ LW.skins.mesa = {
       g.addEventListener('pointerdown', () => {
         const a = g.dataset.acao;
         if (this.ctx.REQS[a](this.ctx.estado)) return;   // dá: o núcleo cuida do resto
-        this.sussurro([this.VERBO[a] + ' — hoje não dá', this.ctx.REQ_TXT[a]], 2600);
+        this.sussurro([this.verbo(a) + ' — hoje não dá', this.ctx.REQ_TXT[a]], 2600);
         this.anima(g.querySelector('.anim'), 'trava');
       });
     });
+  },
+
+  /* Mede a letra desenhada. Onde não há layout (DOM de teste), cai numa conta
+     grosseira: a tarja sai um pouco fora do ponto, mas nada quebra. */
+  medir(el) {
+    if (typeof el.getBBox === 'function') {
+      try {
+        const b = el.getBBox();
+        if (b && b.width > 1) return b;
+      } catch (_) { /* sem layout: usa a conta abaixo */ }
+    }
+    const fs = 14, larg = (el.textContent || '').length * fs * 0.56;
+    return { x: -larg / 2, y: -8.1, width: larg, height: fs * 1.17 };
   },
 
   /* ------- utilidades de texto escrito à mão ------- */
@@ -1975,18 +2184,16 @@ LW.skins.mesa = {
     });
   },
 
-  VERBO: {
-    work: 'trabalhar', study: 'estudar', rest: 'parar pra um café', eat: 'comer',
-    leisure_a: 'ouvir um disco', leisure_b: 'tocar um pouco', socialize: 'conversar',
-    help: 'dar uma mão', save: 'guardar no pote', withdraw: 'pegar de volta',
-  },
+  // o nome do gesto é sempre o do núcleo: se a mesa inventar o próprio apelido
+  // ("dar uma mão"), a palavra vira confundidor do que o estudo mede
+  verbo(acao) { return (this.ctx.ACOES_PT[acao] || {}).nome || acao; },
 
   dizer(acao) {
     const e = this.el, ctx = this.ctx;
     if (Date.now() < this.travaAte) return;          // o que acabou de acontecer tem preferência
     if (!acao) { e.dica.classList.remove('ver'); return; }
     const pode = ctx.REQS[acao](ctx.estado);
-    const linhas = pode ? [this.VERBO[acao]] : [this.VERBO[acao] + ' — hoje não dá', ctx.REQ_TXT[acao]];
+    const linhas = pode ? [this.verbo(acao)] : [this.verbo(acao) + ' — hoje não dá', ctx.REQ_TXT[acao]];
     this.escrever(e.dica, linhas, 170, 200, 19, 16);
     if (linhas.length > 1) e.dica.lastChild.setAttribute('font-size', '12.5');
     e.dica.classList.add('ver');
@@ -2122,11 +2329,11 @@ LW.skins.mesa = {
     if (!info.invalid) {
       if (info.acao === 'work' && d.cash > 0) {
         const n = Math.max(1, Math.min(3, Math.round(d.cash / 5)));
-        for (let i = 0; i < n; i++) this.voar(72, 400, 40 + i * 12, 592 + i * 6, i * 110);
+        for (let i = 0; i < n; i++) this.voar(72, 400, 40 + i * 12, 608 + i * 6, i * 110);
       } else if (info.acao === 'save') {
-        this.voar(70, 594, 190, 614, 0);
+        this.voar(70, 610, 190, 626, 0);
       } else if (info.acao === 'withdraw') {
-        this.voar(190, 614, 70, 594, 0);
+        this.voar(190, 626, 70, 610, 0);
       }
     }
     if (info.acao === 'rest' && !info.invalid) {
@@ -2202,7 +2409,9 @@ LW.skins.mesa = {
 /* === quarto.js === */
 /* PELE: o quarto — um cômodo visto de frente, onde alguém mora.
    Não há lista de botões: há uma cama, uma geladeira, uma estante, um violão, uma TV,
-   um celular, a porta do vizinho e um cofrinho. Tocar na coisa É a ação.
+   um celular, a porta do vizinho e um cofrinho. Tocar na coisa É a ação — e cada
+   coisa fica com o NOME CANÔNICO da ação escrito ao lado, sempre visível e igual
+   ao de todas as outras artes (o violão é Lazer A, a TV é Lazer B).
    A frase do objetivo é um bilhete colado na parede; o passo é um calendário.
    A luz da janela atravessa os 50 dias: amanhecer, dia, entardecer, noite.
    Arte portada do protótipo prototipos/proto-quarto.html. */
@@ -2240,11 +2449,15 @@ LW.skins.quarto = {
   .sk-quarto .obj:focus-visible .anel { opacity: 1; }
   .sk-quarto .gosto { opacity: 0; transition: opacity .5s; }
 
+  /* O nome da coisa fica escrito o tempo todo, com a MESMA palavra de todas as
+     artes: quem chega no quarto não precisa adivinhar o que o objeto faz. A
+     letra é de caneta, mas com halo escuro atrás — cream sobre parede, porta ou
+     chão continua legível sem plaquinha cobrindo o desenho. */
   .sk-quarto .verbo { font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', cursive;
-    font-size: 12px; fill: #ffe9c4; opacity: .55; pointer-events: none; transition: opacity .3s;
-    paint-order: stroke; stroke: rgba(14,8,5,.78); stroke-width: 2.8px; stroke-linejoin: round; }
+    font-size: 12.5px; fill: #ffeccb; opacity: .93; pointer-events: none; transition: opacity .3s;
+    paint-order: stroke; stroke: rgba(10,6,4,.92); stroke-width: 3.2px; stroke-linejoin: round; }
   .sk-quarto .obj:hover .verbo, .sk-quarto .obj:focus-visible .verbo { opacity: 1; }
-  .sk-quarto .obj.indisponivel .verbo { opacity: .22; }
+  .sk-quarto .obj.indisponivel .verbo { opacity: .5; }
 
   .sk-quarto .bilhete { font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', cursive;
     color: #4a3a1a; line-height: 1.16; font-size: 13px; text-align: left;
@@ -2574,7 +2787,7 @@ LW.skins.quarto = {
         <g class="sacola fx"><rect x="300" y="330" width="17" height="20" rx="2" fill="#c9b48c"/>
           <path d="M303,330 q5.5,-8 11,0" fill="none" stroke="#a08e68" stroke-width="1.8"/></g>
       </g>
-      <text class="verbo" x="306" y="184" text-anchor="middle">ajudar o vizinho</text>
+      <text class="verbo" x="306" y="185" text-anchor="middle">Ajudar alguém</text>
       <rect class="anel" x="257" y="169" width="117" height="263" rx="4" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2602,7 +2815,7 @@ LW.skins.quarto = {
         <path d="M42,186 l0,10 m-4,-4 l4,4 l4,-4" stroke="#ffe6a8" stroke-width="1.7" fill="none"
           stroke-linecap="round" opacity=".65"/>
       </g>
-      <text class="verbo" x="6" y="272">guardar 8</text>
+      <text class="verbo" x="6" y="272">Guardar 8</text>
       <rect class="anel" x="1" y="177" width="78" height="104" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
     <g class="obj" data-acao="withdraw" data-el="objMartelo">
@@ -2622,7 +2835,7 @@ LW.skins.quarto = {
         <path d="M120,232 l6,-8 m0,0 l-5.6,.6 m5.6,-.6 l-.6,5.6" stroke="#ffe6a8" stroke-width="1.7"
           fill="none" stroke-linecap="round" opacity=".65"/>
       </g>
-      <text class="verbo" x="86" y="272">pegar 8</text>
+      <text class="verbo" x="86" y="272">Pegar 8</text>
       <rect class="anel" x="83" y="177" width="64" height="104" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2643,7 +2856,7 @@ LW.skins.quarto = {
           <rect x="44" y="396" width="27" height="17" rx="2" fill="#f4f0e4" transform="rotate(4 57 404)"/>
         </g>
       </g>
-      <text class="verbo" x="8" y="294">comer</text>
+      <text class="verbo" x="8" y="294">Comer</text>
       <rect class="anel" x="1" y="285" width="86" height="150" rx="7" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2673,7 +2886,7 @@ LW.skins.quarto = {
         <path d="M134,320 l17,10 l17,-10" fill="none" stroke="#8a7256" stroke-width="1.2"/>
         <g class="pagina fx"><rect x="140" y="356" width="16" height="12" rx="1" fill="#f4ecd8"/></g>
       </g>
-      <text class="verbo" x="94" y="298">estudar</text>
+      <text class="verbo" x="94" y="298">Estudar</text>
       <rect class="anel" x="91" y="285" width="86" height="150" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2694,7 +2907,7 @@ LW.skins.quarto = {
         <circle cx="199" cy="410" r="1.6" fill="#d9704f"/>
         <circle class="gosto" data-el="gostoB" cx="246" cy="330" r="7" fill="#ffca6a" opacity="0"/>
       </g>
-      <text class="verbo" x="186" y="326">assistir</text>
+      <text class="verbo" x="186" y="326">Lazer B</text>
       <rect class="anel" x="181" y="285" width="73" height="150" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2729,7 +2942,7 @@ LW.skins.quarto = {
         <g class="fx zzz zzz2" transform="translate(99,459)"><text font-size="13" font-weight="700" fill="#e2e8ff">z</text></g>
         <g class="fx zzz zzz3" transform="translate(107,452)"><text font-size="10" font-weight="700" fill="#e2e8ff">z</text></g>
       </g>
-      <text class="verbo" x="24" y="578">dormir</text>
+      <text class="verbo" x="24" y="578">Descansar</text>
       <rect class="anel" x="1" y="439" width="166" height="144" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2757,7 +2970,7 @@ LW.skins.quarto = {
         <g class="fx nota nota3" transform="translate(208,498)">
           <path d="M0,6 a2.6,2 0 1 0 4,0 v-9 l4,1.6 v-2.6 l-6,-2.4 z" fill="#ffeec4"/></g>
       </g>
-      <text class="verbo" x="178" y="440">tocar</text>
+      <text class="verbo" x="197" y="518" text-anchor="middle">Lazer A</text>
       <rect class="anel" x="171" y="439" width="65" height="138" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
     </g>
 
@@ -2792,7 +3005,7 @@ LW.skins.quarto = {
             <rect x="0" y="0" width="22" height="12" rx="1.6" fill="#cfc46a" stroke="#a8983f" stroke-width="1"/>
             <circle cx="11" cy="6" r="3" fill="#a8983f"/></g>
         </g>
-        <text class="verbo" x="274" y="440" text-anchor="middle">trabalhar</text>
+        <text class="verbo" x="277" y="441" text-anchor="end">Trabalhar</text>
         <rect class="anel" x="240" y="436" width="65" height="69" rx="6" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
       </g>
 
@@ -2827,7 +3040,7 @@ LW.skins.quarto = {
             <circle cx="14" cy="13.5" r="2.6" fill="#8a7a62"/><circle cx="23" cy="13.5" r="2.6" fill="#8a7a62"/>
             <circle cx="32" cy="13.5" r="2.6" fill="#8a7a62"/></g>
         </g>
-        <text class="verbo" x="322" y="522">ligar</text>
+        <text class="verbo" x="341" y="516" text-anchor="middle">Socializar</text>
         <rect class="anel" x="309" y="436" width="65" height="103" rx="8" fill="none" stroke="#ffd48a" stroke-width="2.4"/>
       </g>
     </g>
@@ -3236,17 +3449,21 @@ LW.skins.quarto = {
     leisure_a: '#D2557E', leisure_b: '#9B52A8', socialize: '#4A86C6',
     help: '#83BCDA', save: '#D8C97F', withdraw: '#8E8052',
   };
-  var CURTO = {
+  /* O NOME da ação é do núcleo, não da arte: a mesma palavra nas cinco peles.
+     Se cada arte batizasse a mesma ação de um jeito ("ver gente", "tirar"), a
+     palavra viraria o fator escondido do estudo, no lugar da interface. */
+  var NOME = {
     work: 'Trabalhar', study: 'Estudar', rest: 'Descansar', eat: 'Comer',
-    leisure_a: 'Lazer A', leisure_b: 'Lazer B', socialize: 'Ver gente',
-    help: 'Ajudar', save: 'Guardar', withdraw: 'Tirar',
+    leisure_a: 'Lazer A', leisure_b: 'Lazer B', socialize: 'Socializar',
+    help: 'Ajudar alguém', save: 'Guardar 8', withdraw: 'Pegar 8',
   };
-  /* numa tela de 320 a ficha tem ~45 px: as palavras compridas ganham um hífen
-     escondido, para quebrarem em duas linhas em vez de vazarem da ficha */
-  var SH = '\u00AD';   // hífen que só aparece quando a palavra não cabe
-  var HIFEN = {
-    work: 'Traba' + SH + 'lhar', rest: 'Descan' + SH + 'sar', study: 'Estu' + SH + 'dar',
-    save: 'Guar' + SH + 'dar', help: 'Aju' + SH + 'dar',
+  /* Numa tela de 320 a ficha tem ~46 px e as palavras compridas não cabem numa
+     linha só. <wbr> diz ONDE quebrar sem pôr caractere nenhum no texto: o nome
+     continua sendo, letra por letra, a palavra do núcleo. Um traço escondido
+     também quebraria a linha, mas entra no texto e desfigura o nome. */
+  var ROTULO = {
+    work: 'Traba<wbr>lhar', study: 'Estu<wbr>dar', rest: 'Descan<wbr>sar',
+    socialize: 'Sociali<wbr>zar',
   };
   var DICA = {
     work: '<b>Trabalhar</b> — entra dinheiro, sai energia.',
@@ -3255,20 +3472,20 @@ LW.skins.quarto = {
     eat: '<b>Comer</b> — comida de verdade. O corpo volta ao lugar.',
     leisure_a: '<b>Lazer A</b> — um jeito de se divertir. Talvez seja o seu.',
     leisure_b: '<b>Lazer B</b> — outro jeito de se divertir. Talvez seja o seu.',
-    socialize: '<b>Ver gente</b> — sair com quem você gosta.',
-    help: '<b>Ajudar</b> — dar o seu dia a outra pessoa.',
-    save: '<b>Guardar</b> — oito do bolso vão para o pote.',
-    withdraw: '<b>Tirar</b> — oito do pote voltam para o bolso.',
+    socialize: '<b>Socializar</b> — sair com quem você gosta.',
+    help: '<b>Ajudar alguém</b> — dar o seu dia a outra pessoa.',
+    save: '<b>Guardar 8</b> — oito do bolso vão para o pote.',
+    withdraw: '<b>Pegar 8</b> — oito do pote voltam para o bolso.',
   };
   var FALA = {
     work: 'Você trabalhou o dia inteiro.',
     study: 'Você estudou. Doeu hoje, rende depois.',
-    rest: 'Você parou. O corpo agradeceu.',
+    rest: 'Você descansou. O corpo agradeceu.',
     eat: 'Você comeu direito.',
-    socialize: 'Você viu gente. O dia ficou mais leve.',
-    help: 'Você deu o seu dia a alguém.',
-    save: 'Oito foram para o pote.',
-    withdraw: 'Você tirou oito do pote.',
+    socialize: 'Você socializou. O dia ficou mais leve.',
+    help: 'Você ajudou alguém. O seu dia foi para essa pessoa.',
+    save: 'Você guardou 8: do bolso para o pote.',
+    withdraw: 'Você pegou 8 de volta do pote.',
   };
   var ORDEM = ['work', 'study', 'rest', 'eat', 'leisure_a',
     'socialize', 'help', 'leisure_b', 'save', 'withdraw'];
@@ -3400,13 +3617,17 @@ LW.skins.relogio = {
   .sk-relogio .sussurro.forte { color: #F3CD82; }
 
   /* a mão: duas fileiras de cinco. Cada ficha divide a largura em partes iguais,
-     nunca abaixo de 44 px de lado, e a folga de baixo cabe a inclinação do leque */
+     nunca abaixo de 44 px de lado, e a folga de baixo cabe a inclinação do leque.
+     Essa folga também é o lugar do aviso do núcleo (#lwDica, colado embaixo):
+     sem ela, a frase dele cai em cima do nome das fichas de baixo — e o nome é
+     justamente o que precisa estar legível. 46 px cobrem as duas linhas que a
+     frase ocupa numa tela de 320, mais a inclinação das fichas das pontas. */
   .sk-relogio .mao { position: relative; z-index: 4; flex: 0 0 auto;
-    padding: 4px 6px max(12px, env(safe-area-inset-bottom)); }
-  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 4px; }
+    padding: 4px 4px max(46px, calc(env(safe-area-inset-bottom) + 34px)); }
+  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 3px; }
   .sk-relogio .fila + .fila { margin-top: 5px; }
   .sk-relogio .ficha { position: relative; flex: 1 1 0; min-width: 0; max-width: 76px;
-    height: 68px; border-radius: 11px;
+    height: 70px; border-radius: 11px;
     background: linear-gradient(177deg, #28323F 0%, #1A222C 52%, #0F151D 100%);
     box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06);
     display: flex; flex-direction: column; align-items: center; cursor: pointer; overflow: hidden;
@@ -3414,12 +3635,14 @@ LW.skins.relogio = {
     transform: translateY(var(--dy)) rotate(var(--rot));
     transition: transform .2s cubic-bezier(.2,1.1,.3,1), box-shadow .2s, opacity .2s, filter .2s; }
   .sk-relogio .ficha .capa { width: 100%; height: 4px; background: var(--c); box-shadow: 0 0 9px var(--c); }
-  .sk-relogio .ficha .gl { width: 25px; height: 25px; margin-top: 7px; color: var(--c); display: block; }
+  .sk-relogio .ficha .gl { width: 23px; height: 23px; margin-top: 6px; color: var(--c); display: block; }
+  /* o nome fica sempre aceso, não só sob o dedo: é por ele que a pessoa sabe o
+     que está escolhendo. Cabe em até três linhas sem encostar na borda, e
+     'anywhere' garante que palavra nenhuma vaze da ficha em tela estreita. */
   .sk-relogio .ficha .nm { flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
-    text-align: center; padding: 2px 1px 4px; font-size: 9.4px; font-weight: 700; line-height: 1.08;
-    letter-spacing: -.1px; color: #D8C9B1; }
-  .sk-relogio .ficha .oito { position: absolute; top: 7px; left: 7px; font-size: 9.4px; font-weight: 800;
-    color: var(--c); line-height: 1; }
+    text-align: center; padding: 1px 1px 4px; font-size: 9.6px; font-weight: 700; line-height: 1.1;
+    letter-spacing: -.1px; color: #E7DAC2; overflow-wrap: anywhere;
+    text-shadow: 0 1px 2px rgba(0,0,0,.55); }
   .sk-relogio .ficha .est { position: absolute; top: 7px; right: 6px; width: 11px; height: 11px;
     opacity: 0; transition: opacity .3s; }
   .sk-relogio .ficha.favorita .est { opacity: 1; }
@@ -3429,11 +3652,21 @@ LW.skins.relogio = {
     transform: translateY(calc(var(--dy) - 11px)) rotate(calc(var(--rot) * .35)) scale(1.05);
     box-shadow: 0 20px 30px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1.5px var(--c); }
   .sk-relogio .ficha:focus-visible { outline: 2px solid #F7D68F; outline-offset: 2px; }
-  /* a ficha indisponível recua pouco: mais que isto e ela sai pela borda de baixo */
-  .sk-relogio .ficha.indisponivel { opacity: .34; filter: grayscale(.82); cursor: not-allowed;
+  /* A ficha indisponível recua pouco: mais que isto e ela sai pela borda de baixo.
+     Quem apaga é o cartão — a cor sai da faixa e do ícone, o brilho morre, ela
+     afunda. O NOME não apaga junto: é justamente quando a ação não dá que a
+     pessoa precisa ler o que ela era. (Antes o cartão inteiro caía para 34% e
+     a palavra sumia com ele.) */
+  .sk-relogio .ficha.indisponivel { cursor: not-allowed;
+    background: linear-gradient(177deg, #1B212A 0%, #131922 52%, #0B1017 100%);
+    box-shadow: 0 4px 9px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.05);
     transform: translateY(calc(var(--dy) + 4px)) rotate(var(--rot)) scale(.95); }
+  .sk-relogio .ficha.indisponivel::after { opacity: 0; }
+  .sk-relogio .ficha.indisponivel .capa { opacity: .2; filter: grayscale(1); box-shadow: none; }
+  .sk-relogio .ficha.indisponivel .gl { opacity: .3; filter: grayscale(1); }
+  .sk-relogio .ficha.indisponivel .nm { color: #8E8778; text-shadow: none; }
   .sk-relogio .ficha.indisponivel:hover { transform: translateY(calc(var(--dy) + 4px)) rotate(var(--rot)) scale(.95);
-    box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06); }
+    box-shadow: 0 4px 9px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.05); }
   .sk-relogio .ficha.repensa { animation: sk-relogio-repensa 1.5s ease-out 2; }
   @keyframes sk-relogio-repensa { 0%,100% { box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 0 0 1px rgba(255,255,255,.06) }
     50% { box-shadow: 0 8px 22px rgba(0,0,0,.62), inset 0 0 0 2px var(--c), 0 0 16px var(--c) } }
@@ -3733,14 +3966,15 @@ LW.skins.relogio = {
       var buf = '';
       for (var s = 0; s < 5; s++) {
         var acao = ORDEM[f * 5 + s];
-        /* aria-label igual ao rótulo visível (o núcleo só preenche se faltar) */
-        buf += '<div class="ficha" data-acao="' + acao + '" aria-label="' + CURTO[acao] +
+        /* aria-label igual ao nome visível (o núcleo só preenche se faltar).
+           O "8" de guardar/pegar mora dentro do próprio nome — nada de crachá
+           solto no canto dizendo a mesma coisa por outra via. */
+        buf += '<div class="ficha" data-acao="' + acao + '" aria-label="' + NOME[acao] +
           '" style="--c:' + COR[acao] + ';--dy:' + DY[s] + 'px;--rot:' + ROT[s] + 'deg">' +
           '<span class="capa"></span>' +
           '<svg class="gl" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.85" ' +
           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + GL[acao] + '</svg>' +
-          '<span class="nm">' + (HIFEN[acao] || CURTO[acao]) + '</span>' +
-          (acao === 'save' || acao === 'withdraw' ? '<span class="oito">8</span>' : '') +
+          '<span class="nm">' + (ROTULO[acao] || NOME[acao]) + '</span>' +
           ESTRELA + '</div>';
       }
       filas[f].innerHTML = buf;
@@ -4095,6 +4329,11 @@ LW.skins.rua = {
   .sk-rua .andando .tronco { animation: sk-rua-sobe .4s ease-in-out infinite,
     sk-rua-respira 3.6s ease-in-out infinite; }
 
+  /* ---------- a placa: o nome da ação, sempre à vista ----------
+     A palavra é a mesma em todas as artes; só a madeira muda. Por isso ela
+     nunca depende de toque, de hover nem do estado — está pregada na parede. */
+  .sk-rua .placa .cn { fill: #fff6e3; font-weight: 700; letter-spacing: .15px; }
+
   /* ---------- os lugares ---------- */
   .sk-rua .lugar { cursor: pointer; outline: none; }
   .sk-rua .destaque { opacity: 0; transition: opacity .2s; }
@@ -4128,7 +4367,9 @@ LW.skins.rua = {
   .sk-rua.crise .ceuRuim { opacity: 1; }
 
   /* ---------- a legenda do que acabou de acontecer ---------- */
-  .sk-rua .fala { position: absolute; left: 0; right: 0; bottom: 5px; padding: 0 16px;
+  /* sobe 38px: embaixo mora a dica do núcleo ("toque e segure..."), que em tela
+     de 320 ocupa duas linhas — e duas frases sobrepostas viram um borrão */
+  .sk-rua .fala { position: absolute; left: 0; right: 0; bottom: 38px; padding: 0 16px;
     text-align: center; font-size: 12.5px; line-height: 1.32; color: #d3c0a8;
     min-height: 2.6em; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
   .sk-rua .fala b { color: #ffe0a8; font-weight: 700; }
@@ -4273,6 +4514,13 @@ LW.skins.rua = {
     </g>
   </g>
 
+  <!-- Os postes da faixa: passam ATRÁS das fachadas. Na frente, cortavam
+       exatamente as placas com o nome das ações — e nome cortado não é nome. -->
+  <g pointer-events="none">
+    <rect x="6" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
+    <rect x="365" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
+  </g>
+
   <!-- ===================== A FILA DE FACHADAS ===================== -->
   <rect x="-40" y="452" width="460" height="20" fill="url(#rua-calcada)"/>
   <g fill="#6b464f" opacity=".16">
@@ -4302,8 +4550,13 @@ LW.skins.rua = {
     <circle cx="36" cy="428" r="1.4" fill="#f2c882"/>
     <rect x="16" y="449" width="30" height="4" rx="1.5" fill="#cba175"/>
     <rect class="grade" x="7" y="394" width="48" height="58" fill="#2b2620"/>
-    <text x="31" y="374" text-anchor="middle" font-size="9.5" letter-spacing=".3"
-          fill="#ffe8c8" font-weight="600">sua casa</text>
+    <g class="placa">
+      <rect x="3.5" y="352" width="58" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="2" y="350" width="58" height="26" rx="3" fill="#5a2f2a" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="31" y="361.4" text-anchor="middle" font-size="9.4" letter-spacing=".3"
+            fill="#e3cba4">sua casa</text>
+      <text class="cn" x="31" y="373.4" text-anchor="middle" font-size="10">Descansar</text>
+    </g>
     <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
           fill="#4a3524" opacity=".9">de graça</text>
     <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
@@ -4338,8 +4591,13 @@ LW.skins.rua = {
       <path d="M0 8 q1.6 -12 0 -18 q-3 9 0 18" fill="#84bd74"/>
     </g></g>
     <rect class="grade" x="8" y="396" width="46" height="56" fill="#2b2620"/>
-    <text x="31" y="376" text-anchor="middle" font-size="9" letter-spacing=".2"
-          fill="#e9f3e6" font-weight="600">dona ivone</text>
+    <g class="placa">
+      <rect x="3.5" y="352" width="58" height="38" rx="3" fill="#000" opacity=".25"/>
+      <rect x="2" y="350" width="58" height="38" rx="3" fill="#2f4038" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="31" y="361.4" text-anchor="middle" font-size="9.4" letter-spacing=".2"
+            fill="#e3cba4">dona ivone</text>
+      <text class="cn" x="31" y="373.6" text-anchor="middle" font-size="10.6"><tspan x="31" dy="0">Ajudar </tspan><tspan x="31" dy="11.4">alguém</tspan></text>
+    </g>
     <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
           fill="#4a3524" opacity=".9">−3 e fôlego</text>
     <rect class="foco" x="1.5" y="264" width="59.5" height="204" rx="5" fill="none"
@@ -4357,14 +4615,18 @@ LW.skins.rua = {
       <rect x="37" y="308" width="14" height="15" rx="1.5" fill="url(#rua-vidro)" opacity=".65"/>
     </g>
     <path d="M12 315.5 h14 M19 308 v15 M37 315.5 h14 M44 308 v15" stroke="#7d5623" stroke-width="1.5"/>
-    <rect x="5" y="330" width="52" height="14" fill="#a9762f"/>
-    <text x="31" y="341" text-anchor="middle" font-size="9" letter-spacing="1.1"
-          fill="#fff2d8" font-weight="700">MERCADO</text>
+    <g class="placa">
+      <rect x="3.5" y="330" width="58" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="2" y="328" width="58" height="26" rx="3" fill="#6b4a1e" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="31" y="339.4" text-anchor="middle" font-size="9.4" letter-spacing=".9"
+            fill="#e3cba4">MERCADO</text>
+      <text class="cn" x="31" y="351.4" text-anchor="middle" font-size="11.4">Comer</text>
+    </g>
     <g>
-      <path d="M3 352 h56 l-3 13 h-50 z" fill="#ead9bb"/>
-      <path d="M11 352 h8 l-3 13 h-8 z" fill="#c25046"/>
-      <path d="M27 352 h8 l-3 13 h-8 z" fill="#c25046"/>
-      <path d="M43 352 h8 l-3 13 h-8 z" fill="#c25046"/>
+      <path d="M3 357 h56 l-3 12 h-50 z" fill="#ead9bb"/>
+      <path d="M11 357 h8 l-3 12 h-8 z" fill="#c25046"/>
+      <path d="M27 357 h8 l-3 12 h-8 z" fill="#c25046"/>
+      <path d="M43 357 h8 l-3 12 h-8 z" fill="#c25046"/>
     </g>
     <circle class="luz" cx="31" cy="396" r="30" fill="url(#rua-glowJanela)"/>
     <rect class="luz" x="9" y="372" width="44" height="28" rx="1.5" fill="url(#rua-vidro)"/>
@@ -4409,8 +4671,8 @@ LW.skins.rua = {
     </g>
     <path d="M15 308 v14 M31 308 v14 M47 308 v14 M15 330 v14 M31 330 v14 M47 330 v14"
           stroke="#2c414f" stroke-width="1.4"/>
-    <circle cx="31" cy="358" r="8.5" fill="#e9dfc8" stroke="#2c414f" stroke-width="1.8"/>
-    <path d="M31 358 L31 353 M31 358 L34.5 359.6" stroke="#2c414f" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="31" cy="353" r="7.5" fill="#e9dfc8" stroke="#2c414f" stroke-width="1.7"/>
+    <path d="M31 353 L31 348.6 M31 353 L34 354.4" stroke="#2c414f" stroke-width="1.4" stroke-linecap="round"/>
     <rect x="7" y="392" width="48" height="60" fill="#20303a"/>
     <g class="luz">
       <rect x="7" y="402" width="48" height="50" fill="#f0b866"/>
@@ -4430,11 +4692,12 @@ LW.skins.rua = {
       <rect x="7" y="412" width="48" height="3.5" rx="1.5" fill="#5d7280"/>
     </g>
     <rect class="grade" x="7" y="392" width="48" height="60" fill="#2b2620"/>
-    <g transform="translate(31,0)"><g class="pendurada">
-      <path d="M-16 376 v-5 M16 376 v-5" stroke="#2c414f" stroke-width="1.4"/>
-      <rect x="-23" y="375" width="46" height="14" rx="2" fill="#eadfc4" stroke="#2c414f" stroke-width="1.4"/>
-      <text x="0" y="385.5" text-anchor="middle" font-size="10.8" letter-spacing=".7"
-            fill="#33495a" font-weight="700">O SERVIÇO</text>
+    <g transform="translate(31,0)"><g class="pendurada placa">
+      <path d="M-20 366 v-6 M20 366 v-6" stroke="#2c414f" stroke-width="1.5"/>
+      <rect x="-29" y="364" width="58" height="26" rx="3" fill="#22333f" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="0" y="375.4" text-anchor="middle" font-size="9.4" letter-spacing=".6"
+            fill="#e3cba4">O SERVIÇO</text>
+      <text class="cn" x="0" y="387.4" text-anchor="middle" font-size="10.6">Trabalhar</text>
     </g></g>
     <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
           fill="#4a3524" opacity=".9">custa fôlego</text>
@@ -4458,8 +4721,13 @@ LW.skins.rua = {
       <rect x="36" y="324" width="14" height="14" rx="1.4" fill="url(#rua-vidro)" opacity=".6"/>
     </g>
     <path d="M19 324 v14 M12 331 h14 M43 324 v14 M36 331 h14" stroke="#4b2f45" stroke-width="1.4"/>
-    <text x="31" y="360" text-anchor="middle" font-size="9.5" letter-spacing="1.4"
-          fill="#ffe9d5" font-weight="700">O CURSO</text>
+    <g class="placa">
+      <rect x="3.5" y="346" width="58" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="2" y="344" width="58" height="26" rx="3" fill="#40283b" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="31" y="355.4" text-anchor="middle" font-size="9.4" letter-spacing="1.1"
+            fill="#e3cba4">O CURSO</text>
+      <text class="cn" x="31" y="367.4" text-anchor="middle" font-size="11.4">Estudar</text>
+    </g>
     <g class="luz">
       <path d="M12 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)"/>
       <path d="M34 388 a8 8 0 0 1 16 0 v22 h-16 z" fill="url(#rua-vidro)" opacity=".82"/>
@@ -4493,18 +4761,22 @@ LW.skins.rua = {
       <rect x="37" y="312" width="14" height="15" rx="1.4" fill="url(#rua-vidro)" opacity=".55"/>
     </g>
     <path d="M19 312 v15 M12 319.5 h14 M44 312 v15 M37 319.5 h14" stroke="#66302e" stroke-width="1.4"/>
-    <g class="neon">
-      <text x="35" y="348" text-anchor="middle" font-size="10" letter-spacing="1.4"
-            fill="#ffe08a" font-weight="700">O BAR</text>
+    <g class="neon"><rect x="-1" y="327" width="64" height="32" rx="7" fill="url(#rua-glowJanela)" opacity=".5"/></g>
+    <g class="placa">
+      <rect x="3.5" y="332" width="58" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="2" y="330" width="58" height="26" rx="3" fill="#5a2926" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text x="26" y="341.4" text-anchor="middle" font-size="9.4" letter-spacing="1.1"
+            fill="#e3cba4">O BAR</text>
+      <text class="cn" x="26" y="353.4" text-anchor="middle" font-size="10.6">Lazer A</text>
+      <circle cx="51" cy="337.5" r="6.6" fill="#2b1615" stroke="#e6ba62" stroke-width="1.2"/>
+      <text data-el="marcaA" x="51" y="341.4" text-anchor="middle" font-size="10.5"
+            class="giz" fill="#ffe08a" opacity=".9">?</text>
     </g>
-    <circle cx="11" cy="344" r="7.5" fill="#3a1f1e" stroke="#e6ba62" stroke-width="1.2" opacity=".9"/>
-    <text data-el="marcaA" x="11" y="348" text-anchor="middle" font-size="11.5"
-          class="giz" fill="#ffe08a" opacity=".9">?</text>
     <g>
-      <path d="M4 356 h54 l-3 12 h-48 z" fill="#e6ba62"/>
-      <path d="M12 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
-      <path d="M28 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
-      <path d="M44 356 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+      <path d="M4 360 h54 l-3 12 h-48 z" fill="#e6ba62"/>
+      <path d="M12 360 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+      <path d="M28 360 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
+      <path d="M44 360 h8 l-3 12 h-8 z" fill="#8f4a3d"/>
     </g>
     <circle class="luz" cx="31" cy="404" r="30" fill="url(#rua-glowJanela)"/>
     <g class="luz">
@@ -4573,11 +4845,16 @@ LW.skins.rua = {
       <rect x="2" y="24" width="3.4" height="11" fill="#6d5237"/>
       <rect x="28" y="24" width="3.4" height="11" fill="#6d5237"/>
     </g>
-    <text class="giz" x="54" y="539" text-anchor="middle" font-size="13"
-          fill="#f7e6c6" opacity=".92">a praça</text>
-    <circle cx="99" cy="534" r="9" fill="#2b2434" stroke="#e6ba62" stroke-width="1.2" opacity=".9"/>
-    <text data-el="marcaB" x="99" y="538" text-anchor="middle" font-size="12.5"
-          class="giz" fill="#ffe08a" opacity=".9">?</text>
+    <g class="placa">
+      <rect x="9.5" y="526" width="100" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="8" y="524" width="100" height="26" rx="3" fill="#24402c" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text class="giz" x="50" y="535.4" text-anchor="middle" font-size="9.8"
+            fill="#e3cba4">a praça</text>
+      <text class="cn" x="50" y="547.4" text-anchor="middle" font-size="11.4">Lazer B</text>
+      <circle cx="94" cy="537" r="8" fill="#16241b" stroke="#e6ba62" stroke-width="1.2"/>
+      <text data-el="marcaB" x="94" y="541" text-anchor="middle" font-size="12"
+            class="giz" fill="#ffe08a" opacity=".9">?</text>
+    </g>
     <text class="preco giz" x="92" y="678" text-anchor="middle" font-size="10"
           fill="#f0dcbc" opacity=".7">−3</text>
     <rect class="grade" x="4" y="518" width="112" height="148" rx="7" fill="#141019" fill-opacity=".42"/>
@@ -4602,8 +4879,13 @@ LW.skins.rua = {
     <g transform="translate(214,600)"><g data-el="fig4" class="figurinha" style="animation-delay:-2.3s">
       <circle cx="0" cy="0" r="7" fill="#453f31"/>
       <path d="M-9.5 52 q9.5 -88 19 0 z" fill="#8a996b"/></g></g>
-    <text class="giz" x="172" y="539" text-anchor="middle" font-size="13"
-          fill="#f7e6c6" opacity=".92">a esquina</text>
+    <g class="placa">
+      <rect x="125.5" y="526" width="100" height="26" rx="3" fill="#000" opacity=".25"/>
+      <rect x="124" y="524" width="100" height="26" rx="3" fill="#2b2434" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text class="giz" x="174" y="535.4" text-anchor="middle" font-size="9.8"
+            fill="#e3cba4">a esquina</text>
+      <text class="cn" x="174" y="547.4" text-anchor="middle" font-size="11.4">Socializar</text>
+    </g>
     <text class="preco giz" x="172" y="678" text-anchor="middle" font-size="10"
           fill="#f0dcbc" opacity=".7">−2</text>
     <rect class="grade" x="122" y="518" width="106" height="148" rx="7" fill="#141019" fill-opacity=".42"/>
@@ -4642,8 +4924,11 @@ LW.skins.rua = {
     <rect x="257" y="584" width="28" height="5" rx="2.5" fill="#d9c48a"/>
     <path d="M271 596 v14 M263 604 l8 8 l8 -8" stroke="#ffd166" stroke-width="2.6"
           fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="271" y="640" text-anchor="middle" font-size="10" class="giz"
-          fill="#fff6e4" opacity=".92">guardar 8</text>
+    <g class="placa">
+      <rect x="243.5" y="528" width="58" height="19" rx="3" fill="#000" opacity=".25"/>
+      <rect x="242" y="526" width="58" height="19" rx="3" fill="#2e2b25" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text class="cn" x="271" y="539.6" text-anchor="middle" font-size="10">Guardar 8</text>
+    </g>
     <text class="preco giz" x="271" y="662" text-anchor="middle" font-size="9.5"
           fill="#f0dcbc" opacity=".62">tira 8 do bolso</text>
     <rect class="grade" x="242" y="528" width="58" height="122" rx="5" fill="#141019" fill-opacity=".42"/>
@@ -4660,8 +4945,11 @@ LW.skins.rua = {
     <rect x="325" y="608" width="28" height="6" rx="2" fill="#1f1d19"/>
     <path d="M339 604 v-14 M331 598 l8 -8 l8 8" stroke="#ffd166" stroke-width="2.6"
           fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="339" y="640" text-anchor="middle" font-size="10" class="giz"
-          fill="#fff6e4" opacity=".92">pegar 8</text>
+    <g class="placa">
+      <rect x="311.5" y="528" width="58" height="19" rx="3" fill="#000" opacity=".25"/>
+      <rect x="310" y="526" width="58" height="19" rx="3" fill="#2e2b25" stroke="#f0dcb4" stroke-width="1.1"/>
+      <text class="cn" x="339" y="539.6" text-anchor="middle" font-size="11.4">Pegar 8</text>
+    </g>
     <text class="preco giz" x="339" y="662" text-anchor="middle" font-size="9.5"
           fill="#f0dcbc" opacity=".62">da reserva</text>
     <rect class="grade" x="310" y="528" width="58" height="122" rx="5" fill="#141019" fill-opacity=".42"/>
@@ -4758,8 +5046,6 @@ LW.skins.rua = {
 
   <!-- ===================== A FAIXA DO PEDIDO ===================== -->
   <g pointer-events="none">
-    <rect x="6" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
-    <rect x="365" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
     <text x="187.5" y="192" text-anchor="middle" font-size="10.1" letter-spacing="2.6"
           fill="#ffe9c4" opacity=".85" font-weight="700">PEDIRAM A VOCÊ</text>
     <g class="faixa">
@@ -4807,8 +5093,7 @@ LW.skins.rua = {
     this.timers = [];
     this.escreverPedido(ctx.frase);
     if (ctx.reduzido) raiz.classList.add('parado');
-    this.el.fala.innerHTML = 'Toque num lugar da rua para ir até lá. '
-      + 'O sol mostra quanto do caminho já passou.';
+    this.el.fala.innerHTML = 'Toque num lugar da rua para ir até lá.';
   },
 
   /* a faixa é de pano: o texto quebra em até duas linhas sem sair dela */
@@ -5008,7 +5293,7 @@ LW.skins.rua = {
   FRASE: {
     work: 'Um dia de serviço.', study: 'Uma tarde no curso.', rest: 'Ficou em casa.',
     eat: 'Passou no mercado.', leisure_a: 'Uma noite no bar.', leisure_b: 'Uma volta na praça.',
-    socialize: 'Parou na esquina.', help: 'Deu uma mão pra dona Ivone.',
+    socialize: 'Parou na esquina.', help: 'Ajudou a dona Ivone.',
     save: 'Guardou 8 no banco.', withdraw: 'Tirou 8 do banco.',
   },
 
