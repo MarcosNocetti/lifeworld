@@ -559,6 +559,25 @@ function comecar() {
   raiz.className = 'screen sk-' + skin.id;
   raiz.innerHTML = skin.html || '';
 
+  if (!$('lwGire')) {
+    const gire = document.createElement('div');
+    gire.id = 'lwGire';
+    gire.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#e0a44a" stroke-width="1.6"
+        stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/>
+        <path d="M11 18.5h2"/></svg>
+      <b>Gire o celular</b>
+      <span>Sua vida acontece na vertical — assim tudo cabe na tela e dá para tocar direito.</span>`;
+    document.body.appendChild(gire);
+  }
+
+  let palco = $('lwPalco');
+  if (!palco) {
+    palco = document.createElement('div');
+    palco.id = 'lwPalco';
+    raiz.parentNode.insertBefore(palco, raiz);
+    palco.appendChild(raiz);
+  }
+
   S.ctx = {
     ACOES_PT, REQ_TXT, REQS, VITAIS, fmt,
     estado: S.estado, passo: 1, HORIZON,
@@ -679,9 +698,34 @@ const RAIL_CURTO = {
 };
 
 const RAIL_CSS = `
+/* O palco segura cena + painel. Em retrato ocupa a tela toda; em tela larga
+   (paisagem, tablet, computador) vira uma janela retrato centralizada — sem
+   isso as pecas das peles saem da tela. O transform faz do palco o bloco de
+   contencao do position:fixed das peles.                                    */
+#lwPalco { position: fixed; inset: 0; transform: translateZ(0); overflow: hidden;
+  background: #07060d; }
+@supports (height: 100dvh) { #lwPalco { height: 100dvh; } }
+@media (min-aspect-ratio: 3/5) {
+  #lwPalco { left: 50%; right: auto; width: min(100vw, calc(100dvh * 0.52 + 64px));
+    transform: translateX(-50%) translateZ(0); box-shadow: 0 0 60px rgba(0,0,0,.6); }
+}
+/* Paisagem de celular (tela baixa) nao cabe um jogo retrato sem espremer os
+   alvos abaixo do minimo tocavel. Pedimos para girar, em vez de entregar uma
+   tela quebrada. Computador e tablet (altura folgada) seguem normalmente.   */
+#lwGire { display: none; }
+@media (orientation: landscape) and (max-height: 500px) {
+  #lwGire { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; background: #0b0910; color: #ece6f3;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-align: center; padding: 24px; }
+  #lwGire svg { width: 54px; height: 54px; animation: lwGira 2.6s ease-in-out infinite; }
+  #lwGire b { font-size: 17px; font-weight: 650; }
+  #lwGire span { font-size: 14px; color: #a79dba; max-width: 34ch; }
+}
+@keyframes lwGira { 0%,45%,100% { transform: rotate(0) } 60%,85% { transform: rotate(-90deg) } }
+@media (prefers-reduced-motion: reduce) { #lwGire svg { animation: none; } }
 /* a cena recua: o painel ocupa faixa propria em vez de cobrir a arte */
 #scGame[class*="sk-"] { right: 64px; }
-#lwRail { position: fixed; top: 0; right: 0; bottom: 0; width: 64px; z-index: 40;
+#lwRail { position: absolute; top: 0; right: 0; bottom: 0; width: 64px; z-index: 40;
   display: flex; flex-direction: column; justify-content: center; gap: 2px;
   padding: 8px 5px calc(8px + env(safe-area-inset-bottom)) 5px;
   background: #0d0a14; border-left: 1px solid rgba(255,255,255,.07);
@@ -689,9 +733,9 @@ const RAIL_CSS = `
 #lwRail .lwv { position: relative; display: flex; flex-direction: column; align-items: center;
   gap: 1px; padding: 3px 0; border-radius: 7px; }
 #lwRail svg { width: 17px; height: 17px; display: block; }
-#lwRail .lwq { font-size: 12.5px; font-weight: 700; color: #f0ecf6; line-height: 1;
+#lwRail .lwq { font-size: 13.5px; font-weight: 700; color: #f0ecf6; line-height: 1;
   font-variant-numeric: tabular-nums; }
-#lwRail .lwr { font-size: 8px; letter-spacing: .01em; color: #a79dba; line-height: 1.12;
+#lwRail .lwr { font-size: 9.5px; letter-spacing: .01em; color: #a79dba; line-height: 1.12;
   text-align: center; max-width: 60px; }
 #lwRail .lwb { width: 34px; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.14);
   overflow: hidden; margin-top: 1px; }
@@ -731,7 +775,7 @@ function montarRail(raiz) {
       <span class="lwb"><i style="background:${v.cor}"></i></span>
       <span class="lwd"></span>
     </div>`).join('');
-  (raiz.parentNode || raiz).appendChild(rail);   // irmao da cena, na faixa liberada
+  ($('lwPalco') || raiz.parentNode || raiz).appendChild(rail);   // irmao da cena, na faixa liberada
   S.rail = rail;
 }
 
@@ -946,7 +990,14 @@ function finalizar() {
 /* PELE: o corpo — a interface é o personagem.
    Não há painel: há alguém no centro da tela, respirando. Energia e dinheiro são
    líquidos dentro do corpo; as dez ações orbitam ao redor.
-   Referência de implementação do CONTRATO-SKIN.md. */
+   Referência de implementação do CONTRATO-SKIN.md.
+
+   Geometria: nada de posição fixa em px. A órbita mora numa caixa (.orbita) que
+   se centra no palco e nunca passa de 540px de altura — assim a composição não
+   se esparrama num celular alto nem se atropela num de 568px. As colunas são
+   ancoradas pela LARGURA DO PRÓPRIO ALVO (metade do alvo + folga a partir da
+   borda), então o alvo cabe inteiro em qualquer largura, de 256px para cima.
+   O alvo é a caixa toda (disco + rótulo), sempre maior que 44x44. */
 
 LW.skins.corpo = {
   id: 'corpo',
@@ -955,40 +1006,61 @@ LW.skins.corpo = {
   css: `
   .sk-corpo { position: fixed; inset: 0; display: flex; flex-direction: column;
     background: radial-gradient(120% 80% at 50% 18%, #2b2440 0%, #171327 55%, #100e1c 100%);
-    color: #ece7f5; overflow: hidden; }
-  .sk-corpo .topo { padding: max(14px, env(safe-area-inset-top)) 18px 6px; text-align: center; flex: 0 0 auto; }
+    color: #ece7f5; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+
+  .sk-corpo .topo { flex: 0 0 auto; text-align: center;
+    padding: max(12px, env(safe-area-inset-top)) 14px 4px; }
   .sk-corpo .pedido { font-family: Georgia, 'Iowan Old Style', serif; font-style: italic;
-    font-size: 16px; line-height: 1.3; color: #f0e6d2; }
-  .sk-corpo .dias { display: flex; gap: 3px; justify-content: center; margin-top: 9px; }
-  .sk-corpo .dia { width: 4px; height: 4px; border-radius: 50%; background: #3b3357; }
+    font-size: 16px; line-height: 1.28; color: #f0e6d2; }
+  .sk-corpo .dias { display: flex; align-items: center; justify-content: center;
+    gap: .7%; margin-top: 9px; min-height: 5px; }
+  .sk-corpo .dia { flex: 0 1 auto; width: clamp(2.2px, 1.1%, 4px); aspect-ratio: 1;
+    border-radius: 50%; background: #3b3357; }
   .sk-corpo .dia.ido { background: #e0a44a; }
-  .sk-corpo .dia.hoje { background: #fff; box-shadow: 0 0 7px #e0a44a; transform: scale(1.5); }
+  .sk-corpo .dia.hoje { background: #fff; box-shadow: 0 0 7px #e0a44a; transform: scale(1.6); }
 
   .sk-corpo .palco { flex: 1 1 auto; position: relative; min-height: 0; }
-  .sk-corpo .figura { position: absolute; left: 50%; top: 50%; width: 132px; height: 210px;
-    transform: translate(-50%, -50%); }
+  .sk-corpo .orbita { position: absolute; left: 0; right: 0; top: 50%;
+    transform: translateY(-50%); height: min(100%, 540px);
+    --alvoL: clamp(56px, 21%, 74px);
+    --ax-e: calc(var(--alvoL) / 2 + 4px);
+    --ax-d: calc(100% - var(--alvoL) / 2 - 4px);
+    --ax-ci: calc(50% - var(--alvoL) / 2 - 4px);
+    --ax-cd: calc(50% + var(--alvoL) / 2 + 4px); }
+
+  .sk-corpo .figura { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: clamp(104px, 40%, 152px); aspect-ratio: 132 / 210; max-height: 46%; }
   .sk-corpo .respira { animation: sk-corpo-resp 4.2s ease-in-out infinite; transform-origin: 50% 85%; }
   @keyframes sk-corpo-resp { 0%,100% { transform: scaleY(1) } 50% { transform: scaleY(1.022) } }
   .sk-corpo .palpebra { animation: sk-corpo-pisca 6s infinite; transform-origin: center; }
   @keyframes sk-corpo-pisca { 0%,95%,100% { transform: scaleY(0) } 97% { transform: scaleY(1) } }
 
-  .sk-corpo .alvo { position: absolute; width: 60px; height: 60px; transform: translate(-50%, -50%);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    cursor: pointer; border-radius: 50%; background: rgba(255,255,255,.045);
-    border: 1px solid rgba(255,255,255,.10); transition: transform .18s cubic-bezier(.2,1.6,.4,1), background .18s; }
-  .sk-corpo .alvo:hover, .sk-corpo .alvo:focus-visible { transform: translate(-50%,-50%) scale(1.13);
-    background: rgba(224,164,74,.16); outline: none; border-color: #e0a44a; }
-  .sk-corpo .alvo svg { width: 26px; height: 26px; }
-  .sk-corpo .alvo b { font: 600 8.5px/1 -apple-system, system-ui, sans-serif; letter-spacing: .02em;
-    color: #c8bfda; text-align: center; }
-  .sk-corpo .alvo.indisponivel { opacity: .26; cursor: not-allowed; }
-  .sk-corpo .alvo.indisponivel:hover { transform: translate(-50%,-50%); background: rgba(255,255,255,.045); }
+  .sk-corpo .alvo { position: absolute; left: var(--x); top: var(--y);
+    transform: translate(-50%, -50%); width: var(--alvoL); min-height: 52px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    cursor: pointer; touch-action: manipulation; user-select: none;
+    transition: transform .18s cubic-bezier(.2,1.6,.4,1); }
+  .sk-corpo .disco { width: clamp(40px, 72%, 52px); aspect-ratio: 1; border-radius: 50%;
+    display: grid; place-items: center; background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.11); transition: background .18s, border-color .18s; }
+  .sk-corpo .disco svg { width: 54%; height: 54%; display: block; }
+  .sk-corpo .alvo b { font: 650 10px/1.15 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: #cec5e0; text-align: center; text-shadow: 0 1px 3px rgba(10,8,18,.92); }
+  .sk-corpo .alvo:hover, .sk-corpo .alvo:focus-visible { transform: translate(-50%,-50%) scale(1.1); outline: none; }
+  .sk-corpo .alvo:hover .disco, .sk-corpo .alvo:focus-visible .disco {
+    background: rgba(224,164,74,.18); border-color: #e0a44a; }
+  .sk-corpo .alvo:focus-visible .disco { box-shadow: 0 0 0 3px rgba(224,164,74,.45); }
+  .sk-corpo .alvo:hover b, .sk-corpo .alvo:focus-visible b { color: #f6f0ff; }
+  .sk-corpo .alvo.indisponivel { opacity: .34; cursor: not-allowed; }
+  .sk-corpo .alvo.indisponivel:hover { transform: translate(-50%,-50%); }
+  .sk-corpo .alvo.indisponivel:hover .disco { background: rgba(255,255,255,.05);
+    border-color: rgba(255,255,255,.11); }
 
-  .sk-corpo .fala { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-    width: min(90%, 340px); text-align: center; font-size: 13.5px; color: #b7aec9; min-height: 2.6em; }
+  .sk-corpo .fala { flex: 0 0 auto; min-height: 3em; padding: 2px 16px 0; text-align: center;
+    font-size: 13.5px; line-height: 1.35; color: #b7aec9; }
   .sk-corpo .fala .grande { color: #f3ede0; font-size: 15px; }
 
-  .sk-corpo .rodape { flex: 0 0 auto; padding: 8px 16px max(16px, env(safe-area-inset-bottom)); }
+  .sk-corpo .rodape { flex: 0 0 auto; padding: 4px 16px max(12px, env(safe-area-inset-bottom)); }
   .sk-corpo .lw-numeros { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .sk-corpo .lw-numeros.lw-explicito { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px 12px; }
   .sk-corpo .lw-n { display: flex; align-items: baseline; gap: 5px; font-size: 12px; color: #9d94b0; }
@@ -1005,6 +1077,11 @@ LW.skins.corpo = {
   @keyframes sk-corpo-abalo { 10%,90% { transform: translate(-50%,-50%) translateX(-3px) }
     30%,70% { transform: translate(-50%,-50%) translateX(4px) } }
 
+  @media (max-width: 380px) {
+    .sk-corpo .pedido { font-size: 15px; }
+    .sk-corpo .fala { font-size: 12.5px; min-height: 2.8em; }
+    .sk-corpo .fala .grande { font-size: 14px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .sk-corpo .respira, .sk-corpo .palpebra, .sk-corpo .flash.on, .sk-corpo .abalo { animation: none; }
   }`,
@@ -1015,32 +1092,34 @@ LW.skins.corpo = {
     <div class="dias" data-el="dias"></div>
   </div>
   <div class="palco" data-el="palco">
-    <svg class="figura" viewBox="0 0 132 210" aria-hidden="true">
-      <defs>
-        <clipPath id="skc-tronco"><rect x="41" y="66" width="50" height="82" rx="22"/></clipPath>
-      </defs>
-      <g class="respira">
-        <rect x="41" y="66" width="50" height="82" rx="22" fill="#3a3357"/>
-        <rect data-el="energia" x="41" y="66" width="50" height="82" fill="#5fa8e0" clip-path="url(#skc-tronco)" opacity=".85"/>
-        <rect data-el="dinheiro" x="41" y="120" width="50" height="28" fill="#e0a44a" clip-path="url(#skc-tronco)" opacity=".9"/>
-        <rect x="41" y="66" width="50" height="82" rx="22" fill="none" stroke="rgba(255,255,255,.22)"/>
-        <circle data-el="cabeca" cx="66" cy="42" r="23" fill="#e8c9a6"/>
-        <circle cx="58" cy="40" r="2.4" fill="#2a2038"/><circle cx="74" cy="40" r="2.4" fill="#2a2038"/>
-        <g class="palpebra"><rect x="54" y="36" width="24" height="8" fill="#e8c9a6"/></g>
-        <path data-el="boca" d="M58 50 Q66 55 74 50" stroke="#2a2038" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <rect x="52" y="150" width="11" height="46" rx="5" fill="#3a3357"/>
-        <rect x="69" y="150" width="11" height="46" rx="5" fill="#3a3357"/>
-      </g>
-    </svg>
+    <div class="orbita" data-el="orbita">
+      <svg class="figura" viewBox="0 0 132 210" aria-hidden="true">
+        <defs>
+          <clipPath id="skc-tronco"><rect x="41" y="66" width="50" height="82" rx="22"/></clipPath>
+        </defs>
+        <g class="respira">
+          <rect x="41" y="66" width="50" height="82" rx="22" fill="#3a3357"/>
+          <rect data-el="energia" x="41" y="66" width="50" height="82" fill="#5fa8e0" clip-path="url(#skc-tronco)" opacity=".85"/>
+          <rect data-el="dinheiro" x="41" y="120" width="50" height="28" fill="#e0a44a" clip-path="url(#skc-tronco)" opacity=".9"/>
+          <rect x="41" y="66" width="50" height="82" rx="22" fill="none" stroke="rgba(255,255,255,.22)"/>
+          <circle data-el="cabeca" cx="66" cy="42" r="23" fill="#e8c9a6"/>
+          <circle cx="58" cy="40" r="2.4" fill="#2a2038"/><circle cx="74" cy="40" r="2.4" fill="#2a2038"/>
+          <g class="palpebra"><rect x="54" y="36" width="24" height="8" fill="#e8c9a6"/></g>
+          <path data-el="boca" d="M58 50 Q66 55 74 50" stroke="#2a2038" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <rect x="52" y="150" width="11" height="46" rx="5" fill="#3a3357"/>
+          <rect x="69" y="150" width="11" height="46" rx="5" fill="#3a3357"/>
+        </g>
+      </svg>
+    </div>
     <div class="flash" data-el="flash"></div>
-    <div class="fala" data-el="fala"></div>
   </div>
+  <div class="fala" data-el="fala"></div>
   <div class="rodape"><div data-slot="numeros"></div></div>`,
 
   montar(raiz, ctx) {
     const q = s => raiz.querySelector(`[data-el="${s}"]`);
     this.el = {
-      pedido: q('pedido'), dias: q('dias'), palco: q('palco'), fala: q('fala'),
+      pedido: q('pedido'), dias: q('dias'), orbita: q('orbita'), fala: q('fala'),
       energia: q('energia'), dinheiro: q('dinheiro'), boca: q('boca'),
       cabeca: q('cabeca'), flash: q('flash'), figura: raiz.querySelector('.figura'),
     };
@@ -1048,29 +1127,39 @@ LW.skins.corpo = {
     this.el.dias.innerHTML = Array.from({ length: ctx.HORIZON }, () => '<i class="dia"></i>').join('');
 
     const ICONES = {
-      work: '<path d="M4 9h18v11H4z"/><path d="M9 9V5h8v4"/>',
-      study: '<path d="M4 5h8v15H4z"/><path d="M14 5h8v15h-8z"/>',
-      rest: '<path d="M3 17v-5h18v5"/><path d="M6 12V8h6v4"/>',
-      eat: '<path d="M7 3v9m0 0v9m0-9h10"/><path d="M17 3v18"/>',
-      leisure_a: '<circle cx="13" cy="17" r="4"/><path d="M17 17V4l4 2"/>',
-      leisure_b: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/>',
-      socialize: '<circle cx="9" cy="9" r="3"/><circle cx="16" cy="11" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/>',
-      help: '<path d="M12 20s-7-4.4-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.6-7 9-7 9z"/>',
-      save: '<path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/>',
-      withdraw: '<path d="M12 19V8m0 0L8 12m4-4l4 4"/><path d="M4 4h16"/>',
+      work: '<path d="M3 8h18v12H3z"/><path d="M9 8V5h6v3"/><path d="M3 13h18"/>',
+      study: '<path d="M12 6.6C10.5 5.2 8.2 4.8 4.5 5v12.6c3.7-.2 6 .2 7.5 1.6 1.5-1.4 3.8-1.8 7.5-1.6V5c-3.7-.2-6 .2-7.5 1.6z"/><path d="M12 6.6v12.6"/>',
+      rest: '<path d="M2.5 19v-9"/><path d="M2.5 14h19v5"/><path d="M21.5 19v-5"/><circle cx="7.5" cy="10.6" r="2.1"/><path d="M11 14v-2.4a1.6 1.6 0 011.6-1.6h5.8a1.6 1.6 0 011.6 1.6V14"/>',
+      eat: '<path d="M6 3v5a2.6 2.6 0 005.2 0V3"/><path d="M8.6 3v5"/><path d="M8.6 11v10"/><path d="M17.4 3c1.7 1.5 1.7 5.6 0 7.1V21"/>',
+      leisure_a: '<circle cx="9" cy="17.5" r="3.5"/><path d="M12.5 17.5V4l7 2.4"/><path d="M12.5 9.6l7 2.4"/>',
+      leisure_b: '<circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v16.8M3.6 12h16.8"/>',
+      socialize: '<circle cx="8.4" cy="8.6" r="2.9"/><circle cx="16.4" cy="10.4" r="2.2"/><path d="M2.8 19.6c0-3.1 2.5-5 5.6-5s5.6 1.9 5.6 5"/><path d="M15 15c2.6.2 4.4 1.9 4.4 4.6"/>',
+      help: '<circle cx="12" cy="14.6" r="3"/><path d="M6 21.4c0-3 2.7-4.6 6-4.6s6 1.6 6 4.6"/><path d="M12 8.2S8.6 6.4 8.6 4.4A1.9 1.9 0 0112 3.3a1.9 1.9 0 013.4 1.1c0 2-3.4 3.8-3.4 3.8z"/>',
+      save: '<path d="M12 3v8"/><path d="M8.4 7.6L12 11.2l3.6-3.6"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>',
+      withdraw: '<path d="M12 11.2V3"/><path d="M8.4 6.6L12 3l3.6 3.6"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>',
     };
-    // órbita: ângulos escolhidos para não cobrir a figura nem se sobrepor
+    // Rótulo curto: cabe numa linha dentro do alvo mesmo num celular de 320px.
+    // O nome completo continua no aria-label e no title (o núcleo põe).
+    const ROTULO = {
+      work: 'Trabalhar', study: 'Estudar', rest: 'Descansar', eat: 'Comer',
+      leisure_a: 'Lazer A', leisure_b: 'Lazer B', socialize: 'Socializar',
+      help: 'Ajudar', save: 'Poupar', withdraw: 'Sacar',
+    };
+    // A órbita: três pares nas laterais (deixam a figura livre no meio) e uma
+    // fileira de quatro embaixo. x vem das âncoras da .orbita; y é % da órbita.
     const POS = {
-      rest: [18, 20], eat: [82, 20], study: [10, 44], work: [90, 44],
-      socialize: [12, 68], help: [88, 68], leisure_a: [26, 88], leisure_b: [74, 88],
-      save: [42, 92], withdraw: [58, 92],
+      rest: ['--ax-e', '12%'], eat: ['--ax-d', '12%'],
+      study: ['--ax-e', '40%'], work: ['--ax-d', '40%'],
+      socialize: ['--ax-e', '68%'], help: ['--ax-d', '68%'],
+      leisure_a: ['--ax-e', '91%'], save: ['--ax-ci', '91%'],
+      withdraw: ['--ax-cd', '91%'], leisure_b: ['--ax-d', '91%'],
     };
-    this.el.palco.insertAdjacentHTML('beforeend', ACTIONS.map(a => {
+    this.el.orbita.insertAdjacentHTML('beforeend', ACTIONS.map(a => {
       const [x, y] = POS[a];
-      return `<div class="alvo" data-acao="${a}" style="left:${x}%;top:${y}%">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#e6dcf2" stroke-width="1.6"
-             stroke-linecap="round" stroke-linejoin="round">${ICONES[a]}</svg>
-        <b>${ctx.ACOES_PT[a].nome}</b></div>`;
+      return `<div class="alvo" data-acao="${a}" style="--x:var(${x});--y:${y}">
+        <span class="disco"><svg viewBox="0 0 24 24" fill="none" stroke="#e6dcf2" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[a]}</svg></span>
+        <b>${ROTULO[a] || ctx.ACOES_PT[a].nome}</b></div>`;
     }).join(''));
   },
 
@@ -1154,7 +1243,10 @@ LW.skins.mesa = {
   .sk-mesa { position: fixed; inset: 0; background: #050302; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-  .sk-mesa .quadro { position: relative; width: min(100vw, 46.18vh); height: min(100vh, 216.5vw);
+  /* o tampo ocupa toda a área livre da cena: o desenho continua na proporção certa,
+     e a madeira é esticada por JS até as bordas (nada de faixas pretas no celular).
+     --u = quanto vale, em pixels, uma unidade do desenho; o JS acerta o valor exato. */
+  .sk-mesa .quadro { position: relative; width: 100%; height: 100%;
     --u: calc(min(100vw, 46.18vh) / 375); }
   .sk-mesa .cena { display: block; width: 100%; height: 100%; }
   .sk-mesa text { pointer-events: none; }
@@ -1271,7 +1363,9 @@ LW.skins.mesa = {
     <linearGradient id="m-madeira" x1="0" y1="0" x2=".8" y2="1">
       <stop offset="0" stop-color="#6a4830"/><stop offset=".4" stop-color="#4a3120"/>
       <stop offset="1" stop-color="#2a1a11"/></linearGradient>
-    <radialGradient id="m-feixe" cx=".84" cy=".04" r=".92">
+    <!-- a luz da luminária fica presa à luminária, não ao tamanho do tampo -->
+    <radialGradient id="m-feixe" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1"
+                    gradientTransform="translate(315 32.5) scale(345 747)">
       <stop offset="0" stop-color="#ffd694" stop-opacity=".72"/>
       <stop offset=".22" stop-color="#f5b568" stop-opacity=".36"/>
       <stop offset=".48" stop-color="#c98a44" stop-opacity=".12"/>
@@ -1332,13 +1426,13 @@ LW.skins.mesa = {
       <feGaussianBlur stdDeviation="9"/></filter>
     <clipPath id="m-cortaCaneca"><path d="M262 302 h74 v52 a37 30 0 0 1 -74 0 z"/></clipPath>
     <clipPath id="m-cortaPote"><path d="M252 704 h72 v58 a36 13 0 0 1 -72 0 z"/></clipPath>
-    <clipPath id="m-tudo"><rect width="375" height="812"/></clipPath>
+    <clipPath id="m-tudo"><rect data-el="clipe" width="375" height="812"/></clipPath>
   </defs>
 
   <g clip-path="url(#m-tudo)">
-  <!-- ===== tampo ===== -->
-  <rect width="375" height="812" fill="url(#m-madeira)"/>
-  <rect width="375" height="812" fill="url(#m-madeira)" filter="url(#m-veios)" opacity=".92"/>
+  <!-- ===== tampo (as peças "cheio" são esticadas até a borda da tela) ===== -->
+  <rect class="cheio" width="375" height="812" fill="url(#m-madeira)"/>
+  <rect class="cheio" width="375" height="812" fill="url(#m-madeira)" filter="url(#m-veios)" opacity=".92"/>
   <g opacity=".2" stroke="#0a0503" fill="none">
     <path d="M-10 112 C 90 88, 210 144, 390 106" stroke-width="1.8"/>
     <path d="M-10 272 C 120 244, 250 300, 390 256" stroke-width="1.1"/>
@@ -1365,8 +1459,8 @@ LW.skins.mesa = {
   <path d="M256 722 q56 12 122 6" fill="none" stroke="#5b6377" stroke-width="1" opacity=".28"/>
 
   <!-- ===== a luz da luminária caindo na mesa ===== -->
-  <rect data-el="feixe" width="375" height="812" fill="url(#m-feixe)"/>
-  <rect data-el="frio" width="375" height="812" fill="#4b6f9c" opacity="0"/>
+  <rect class="cheio" data-el="feixe" width="375" height="812" fill="url(#m-feixe)"/>
+  <rect class="cheio" data-el="frio" width="375" height="812" fill="#4b6f9c" opacity="0"/>
   <g fill="#ffe7bb" opacity=".55">
     <circle class="mote fx" cx="300" cy="120" r="1.5"/>
     <circle class="mote b fx" cx="252" cy="180" r="1.1"/>
@@ -1791,11 +1885,11 @@ LW.skins.mesa = {
   <!-- ===== camada dos voos de dinheiro ===== -->
   <g data-el="voo"></g>
 
-  <rect width="375" height="812" fill="url(#m-vinheta)" pointer-events="none"/>
-  <rect x="0" y="794" width="375" height="18" fill="url(#m-beira)"/>
-  <rect x="0" y="794" width="375" height="1.8" fill="#a67a4e" opacity=".5"/>
-  <rect width="375" height="812" filter="url(#m-grao)" opacity=".6" pointer-events="none"/>
-  <rect class="escuro" data-el="escuro" width="375" height="812" fill="#050302"/>
+  <rect class="cheio" width="375" height="812" fill="url(#m-vinheta)" pointer-events="none"/>
+  <rect data-el="beira" x="0" y="794" width="375" height="18" fill="url(#m-beira)"/>
+  <rect data-el="beiraLuz" x="0" y="794" width="375" height="1.8" fill="#a67a4e" opacity=".5"/>
+  <rect class="cheio" width="375" height="812" filter="url(#m-grao)" opacity=".6" pointer-events="none"/>
+  <rect class="escuro cheio" data-el="escuro" width="375" height="812" fill="#050302"/>
   </g>
   </svg>
 
@@ -2422,9 +2516,9 @@ LW.skins.quarto = {
       <rect x="256" y="44" width="100" height="128" rx="3" fill="#eae1ce"/>
       <rect x="256" y="44" width="100" height="16" rx="3" fill="#a8483a"/>
       <circle cx="286" cy="44" r="3" fill="#8c8578"/><circle cx="326" cy="44" r="3" fill="#8c8578"/>
-      <text x="306" y="56" font-size="8" fill="#f8e2da" text-anchor="middle" letter-spacing=".14em">MEUS 50 DIAS</text>
+      <text x="306" y="56" font-size="10.8" fill="#f8e2da" text-anchor="middle" letter-spacing=".14em">MEUS 50 DIAS</text>
       <text data-el="diaNum" x="306" y="94" font-size="31" font-weight="800" fill="#3e3428" text-anchor="middle">1</text>
-      <text x="306" y="106" font-size="7.5" fill="#8a7f6c" text-anchor="middle" letter-spacing=".18em">HOJE</text>
+      <text x="306" y="106" font-size="10.1" fill="#8a7f6c" text-anchor="middle" letter-spacing=".18em">HOJE</text>
       <g data-el="grade" stroke-linecap="round" stroke-width="3.4" stroke="#cdc1aa"></g>
       <circle data-el="hoje" cx="266" cy="120" r="5" fill="none" stroke="#c2513f" stroke-width="1.8"/>
     </g>
@@ -2504,6 +2598,7 @@ LW.skins.quarto = {
       <rect x="4" y="182" width="72" height="94" fill="none" pointer-events="all"/>
     </g>
     <g class="obj" data-acao="withdraw" data-el="objMartelo">
+      <rect class="hit" x="70" y="188" width="70" height="108" fill="transparent" pointer-events="all"/>
       <g class="art">
         <g transform="rotate(14 104 226)">
           <rect x="100" y="212" width="7" height="34" rx="3" fill="#8a6a44"/>
@@ -2633,6 +2728,7 @@ LW.skins.quarto = {
 
     <!-- violão encostado -->
     <g class="obj" data-acao="leisure_a" data-el="objViolao">
+      <rect class="hit" x="170" y="418" width="56" height="140" fill="transparent" pointer-events="all"/>
       <g class="art">
         <g transform="rotate(11 196 540)">
           <rect x="192" y="436" width="8" height="52" rx="2" fill="#6b4a31"/>
@@ -2712,6 +2808,7 @@ LW.skins.quarto = {
 
       <!-- celular: ligar pra alguém -->
       <g class="obj" data-acao="socialize" data-el="objCel">
+      <rect class="hit" x="308" y="444" width="70" height="108" fill="transparent" pointer-events="all"/>
         <g class="art">
           <g transform="rotate(-14 342 484)">
             <rect x="332" y="466" width="21" height="34" rx="4" fill="#22252b"/>
@@ -3138,6 +3235,13 @@ LW.skins.quarto = {
     leisure_a: 'Lazer A', leisure_b: 'Lazer B', socialize: 'Ver gente',
     help: 'Ajudar', save: 'Guardar', withdraw: 'Tirar',
   };
+  /* numa tela de 320 a ficha tem ~45 px: as palavras compridas ganham um hífen
+     escondido, para quebrarem em duas linhas em vez de vazarem da ficha */
+  var SH = '\u00AD';   // hífen que só aparece quando a palavra não cabe
+  var HIFEN = {
+    work: 'Traba' + SH + 'lhar', rest: 'Descan' + SH + 'sar', study: 'Estu' + SH + 'dar',
+    save: 'Guar' + SH + 'dar', help: 'Aju' + SH + 'dar',
+  };
   var DICA = {
     work: '<b>Trabalhar</b> — entra dinheiro, sai energia.',
     study: '<b>Estudar</b> — custa hoje; o trabalho paga mais depois.',
@@ -3203,8 +3307,10 @@ LW.skins.relogio = {
   .sk-relogio .clarao.on { animation: sk-relogio-clar 1.1s ease-out forwards; }
   @keyframes sk-relogio-clar { 0% { opacity: 0 } 9% { opacity: 1 } 100% { opacity: 0 } }
 
-  .sk-relogio .mostrador { position: relative; z-index: 3; flex: 1 1 auto; min-height: 190px;
-    padding: 4px 0 0; }
+  /* o mostrador cede altura: o SVG é 'meet', então encolher só o deixa menor,
+     nunca cortado — e assim as fichas nunca saem da tela numa tela curta */
+  .sk-relogio .mostrador { position: relative; z-index: 3; flex: 1 1 auto; min-height: 118px;
+    padding: 2px 0 0; }
   .sk-relogio .face { display: block; width: 100%; height: 100%; }
   /* a crise esfria o que ainda não foi vivido; os dias já vividos guardam a cor deles */
   .sk-relogio.frio .mostrador { filter: saturate(.88) brightness(.97); }
@@ -3213,9 +3319,11 @@ LW.skins.relogio = {
   @keyframes sk-relogio-treme { 10%,90% { transform: translate(-2px,1px) }
     30%,70% { transform: translate(3px,-2px) } 50% { transform: translate(-3px,2px) } }
 
-  .sk-relogio .aro-frase { fill: #CBA666; font-size: 12.4px; font-weight: 600; letter-spacing: 1.4px;
+  /* o mostrador desenha num viewBox de 360 e cabe em ~0,72 da tela: texto de 12
+     unidades aqui vale ~9 px de verdade. Nada abaixo disso. */
+  .sk-relogio .aro-frase { fill: #D9B478; font-size: 17px; font-weight: 600; letter-spacing: .8px; }
+  .sk-relogio .aro-dia { fill: #97835F; font-size: 13px; font-weight: 700; letter-spacing: 1.4px;
     text-transform: uppercase; }
-  .sk-relogio .aro-dia { fill: #7E6E54; font-size: 10.2px; font-weight: 700; letter-spacing: 2.1px; }
   .sk-relogio .tick { stroke: #4E4636; stroke-width: 1.1; stroke-linecap: round; }
   .sk-relogio .tick.dez { stroke: #7E6B45; stroke-width: 1.6; }
 
@@ -3251,7 +3359,7 @@ LW.skins.relogio = {
   .sk-relogio .aura { transform-box: fill-box; transform-origin: center;
     animation: sk-relogio-aura 4.6s ease-in-out infinite; }
   @keyframes sk-relogio-aura { 0%,100% { transform: scale(1) } 50% { transform: scale(1.09) } }
-  .sk-relogio .orbLbl { fill: #7B6D5A; font-size: 7.6px; letter-spacing: .6px; font-weight: 700; text-anchor: middle; }
+  .sk-relogio .orbLbl { fill: #9B8B6F; font-size: 12px; letter-spacing: .1px; font-weight: 700; text-anchor: middle; }
 
   .sk-relogio .fissura { stroke: #080C12; stroke-width: 3.2; fill: none; opacity: 0;
     stroke-dasharray: 460; stroke-dashoffset: 460; }
@@ -3259,64 +3367,66 @@ LW.skins.relogio = {
   .sk-relogio.rachou .fissura { opacity: 1; animation: sk-relogio-rachar .9s ease-out forwards; }
   @keyframes sk-relogio-rachar { to { stroke-dashoffset: 0 } }
 
+  /* a prateleira: cinco coisas dividindo a largura em partes iguais, com rótulo
+     que pode quebrar em duas linhas em vez de vazar para fora da tela */
   .sk-relogio .mesa { position: relative; z-index: 3; flex: 0 0 auto; display: flex;
-    justify-content: space-between; padding: 0 8px; height: 80px; }
-  .sk-relogio .mesa::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1px;
+    justify-content: center; gap: 2px; padding: 0 6px 6px; }
+  .sk-relogio .mesa::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 1px;
     background: linear-gradient(90deg, transparent, rgba(211,172,99,.34) 20%, rgba(211,172,99,.34) 80%, transparent); }
-  .sk-relogio .coisa { width: 70px; display: flex; flex-direction: column; align-items: center;
-    justify-content: flex-end; padding-bottom: 9px; }
-  .sk-relogio .coisa svg { display: block; width: 56px; height: 46px; overflow: visible; }
-  .sk-relogio .coisa .rot { font-size: 7.4px; letter-spacing: .55px; font-weight: 700; color: #75674F;
-    text-transform: uppercase; margin-top: 3px; white-space: nowrap; }
+  .sk-relogio .coisa { flex: 1 1 0; min-width: 0; max-width: 88px; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end; }
+  .sk-relogio .coisa svg { display: block; width: 100%; height: 38px; }
+  .sk-relogio .coisa .rot { font-size: 9.4px; line-height: 1.14; font-weight: 600; color: #9B8B6F;
+    margin-top: 3px; text-align: center; min-height: 2.28em; }
 
-  .sk-relogio .tira { position: relative; z-index: 3; flex: 0 0 auto; padding: 0 14px; }
-  .sk-relogio .lw-numeros { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 5px 0 3px; }
-  .sk-relogio .lw-numeros.lw-explicito { display: grid; grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: minmax(0, 1fr); gap: 3px 9px; }
-  .sk-relogio .lw-n { display: flex; align-items: baseline; gap: 4px; font-size: 10.5px; color: #8A7C68; }
-  .sk-relogio .lw-explicito .lw-n { flex-direction: column; align-items: stretch; gap: 0;
-    font-size: 8.2px; line-height: 1.2; }
-  .sk-relogio .lw-explicito .lw-rot { min-height: 2em; }
-  .sk-relogio .lw-explicito .lw-val { font-size: 11px; }
+  /* o núcleo esvazia este slot; sem altura, para o palco respirar */
+  .sk-relogio .tira { position: relative; z-index: 3; flex: 0 0 auto; }
+  .sk-relogio .lw-numeros:not(.vazio) { display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 2px 12px; padding: 3px 12px; font-size: 10.5px; color: #9B8B6F; }
   .sk-relogio .lw-val { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 12px; color: #EFE2CA; }
   .sk-relogio .lw-n.perigo .lw-val { color: #E4645C; }
-  .sk-relogio .lw-bar { display: block; width: 100%; height: 2.5px; background: rgba(255,255,255,.09); border-radius: 2px; }
-  .sk-relogio .lw-bar i { display: block; height: 100%; border-radius: 2px; }
 
-  .sk-relogio .sussurro { position: relative; z-index: 3; flex: 0 0 auto; min-height: 42px;
-    display: flex; align-items: center; justify-content: center; padding: 2px 22px; text-align: center;
-    font-size: 12.8px; line-height: 1.32; color: #9C8D79; transition: color .3s; }
+  .sk-relogio .sussurro { position: relative; z-index: 3; flex: 0 0 auto; min-height: 38px;
+    max-height: 5.6em; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; padding: 2px 14px; text-align: center;
+    font-size: 12.4px; line-height: 1.3; color: #A2937E; transition: color .3s; }
   .sk-relogio .sussurro b { color: #E9D6B4; font-weight: 600; }
   .sk-relogio .sussurro.forte { color: #F3CD82; }
 
+  /* a mão: duas fileiras de cinco. Cada ficha divide a largura em partes iguais,
+     nunca abaixo de 44 px de lado, e a folga de baixo cabe a inclinação do leque */
   .sk-relogio .mao { position: relative; z-index: 4; flex: 0 0 auto;
-    padding: 0 6px max(12px, env(safe-area-inset-bottom)); }
-  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 9px; }
+    padding: 4px 6px max(12px, env(safe-area-inset-bottom)); }
+  .sk-relogio .fila { display: flex; justify-content: center; align-items: flex-start; gap: 4px; }
   .sk-relogio .fila + .fila { margin-top: 5px; }
-  /* encolhe (sem quebrar) em telas mais estreitas que 375 */
-  .sk-relogio .ficha { position: relative; flex: 0 1 63px; height: 100px; border-radius: 13px;
+  .sk-relogio .ficha { position: relative; flex: 1 1 0; min-width: 0; max-width: 76px;
+    height: 68px; border-radius: 11px;
     background: linear-gradient(177deg, #28323F 0%, #1A222C 52%, #0F151D 100%);
     box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06);
     display: flex; flex-direction: column; align-items: center; cursor: pointer; overflow: hidden;
     -webkit-tap-highlight-color: transparent; user-select: none;
     transform: translateY(var(--dy)) rotate(var(--rot));
     transition: transform .2s cubic-bezier(.2,1.1,.3,1), box-shadow .2s, opacity .2s, filter .2s; }
-  .sk-relogio .ficha .capa { width: 100%; height: 5px; background: var(--c); box-shadow: 0 0 9px var(--c); }
-  .sk-relogio .ficha .gl { width: 33px; height: 33px; margin-top: 12px; color: var(--c); display: block; }
-  .sk-relogio .ficha .nm { font-size: 10px; font-weight: 700; margin-top: 10px; color: #D8C9B1; white-space: nowrap; }
-  .sk-relogio .ficha .oito { font-size: 8.4px; font-weight: 800; color: var(--c); margin-top: 2px; }
-  .sk-relogio .ficha .est { position: absolute; top: 8px; right: 7px; width: 11px; height: 11px;
+  .sk-relogio .ficha .capa { width: 100%; height: 4px; background: var(--c); box-shadow: 0 0 9px var(--c); }
+  .sk-relogio .ficha .gl { width: 25px; height: 25px; margin-top: 7px; color: var(--c); display: block; }
+  .sk-relogio .ficha .nm { flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 2px 1px 4px; font-size: 9.4px; font-weight: 700; line-height: 1.08;
+    letter-spacing: -.1px; color: #D8C9B1; }
+  .sk-relogio .ficha .oito { position: absolute; top: 7px; left: 7px; font-size: 9.4px; font-weight: 800;
+    color: var(--c); line-height: 1; }
+  .sk-relogio .ficha .est { position: absolute; top: 7px; right: 6px; width: 11px; height: 11px;
     opacity: 0; transition: opacity .3s; }
   .sk-relogio .ficha.favorita .est { opacity: 1; }
   .sk-relogio .ficha::after { content: ""; position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(85% 55% at 50% 8%, var(--c) 0%, transparent 62%); opacity: .15; }
   .sk-relogio .ficha:hover, .sk-relogio .ficha:focus-visible {
-    transform: translateY(calc(var(--dy) - 14px)) rotate(calc(var(--rot) * .35)) scale(1.06);
+    transform: translateY(calc(var(--dy) - 11px)) rotate(calc(var(--rot) * .35)) scale(1.05);
     box-shadow: 0 20px 30px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1.5px var(--c); }
-  .sk-relogio .ficha:focus-visible { outline: 2px solid #F7D68F; outline-offset: 3px; }
+  .sk-relogio .ficha:focus-visible { outline: 2px solid #F7D68F; outline-offset: 2px; }
+  /* a ficha indisponível recua pouco: mais que isto e ela sai pela borda de baixo */
   .sk-relogio .ficha.indisponivel { opacity: .34; filter: grayscale(.82); cursor: not-allowed;
-    transform: translateY(calc(var(--dy) + 8px)) rotate(var(--rot)) scale(.94); }
-  .sk-relogio .ficha.indisponivel:hover { transform: translateY(calc(var(--dy) + 8px)) rotate(var(--rot)) scale(.94);
+    transform: translateY(calc(var(--dy) + 4px)) rotate(var(--rot)) scale(.95); }
+  .sk-relogio .ficha.indisponivel:hover { transform: translateY(calc(var(--dy) + 4px)) rotate(var(--rot)) scale(.95);
     box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 1px rgba(255,255,255,.06); }
   .sk-relogio .ficha.repensa { animation: sk-relogio-repensa 1.5s ease-out 2; }
   @keyframes sk-relogio-repensa { 0%,100% { box-shadow: 0 8px 16px rgba(0,0,0,.62), inset 0 0 0 1px rgba(255,255,255,.06) }
@@ -3390,10 +3500,12 @@ LW.skins.relogio = {
         <radialGradient id="rl-piso" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stop-color="#FFD9A0" stop-opacity=".20"/>
           <stop offset="100%" stop-color="#FFD9A0" stop-opacity="0"/></radialGradient>
-        <clipPath id="rl-clipS"><circle cx="134" cy="234" r="15.4"/></clipPath>
-        <clipPath id="rl-clipE"><circle cx="180" cy="234" r="15.4"/></clipPath>
-        <clipPath id="rl-clipA"><circle cx="226" cy="234" r="15.4"/></clipPath>
-        <path id="rl-arcCima" d="M37.6,128.6 A152,152 0 0 1 322.4,128.6" fill="none"/>
+        <clipPath id="rl-clipS"><circle cx="134" cy="230" r="15.4"/></clipPath>
+        <clipPath id="rl-clipE"><circle cx="180" cy="230" r="15.4"/></clipPath>
+        <clipPath id="rl-clipA"><circle cx="226" cy="230" r="15.4"/></clipPath>
+        <!-- 210° de aro para a frase: quanto mais longa a frase, mais volta ela dá,
+             e a letra continua grande o bastante para ler no celular -->
+        <path id="rl-arcCima" d="M33.2,219.3 A152,152 0 1 1 326.8,219.3" fill="none"/>
         <path id="rl-arcBaixo" d="M31.6,234.9 A158,158 0 0 0 328.4,234.9" fill="none"/>
       </defs>
 
@@ -3433,31 +3545,31 @@ LW.skins.relogio = {
       </g>
 
       <g>
-        <circle data-el="ancS" cx="134" cy="234" r="16.6" fill="#0B1017" stroke="rgba(228,100,92,.42)" stroke-width="1.2"/>
+        <circle data-el="ancS" cx="134" cy="230" r="16.6" fill="#0B1017" stroke="rgba(228,100,92,.42)" stroke-width="1.2"/>
         <g clip-path="url(#rl-clipS)">
-          <rect data-el="fillS" x="118" y="215" width="32" height="34" fill="#E4645C" opacity=".82"/>
-          <ellipse data-el="mnsS" cx="134" cy="215" rx="15.4" ry="2.4" fill="#FF9B92" opacity=".9"/>
+          <rect data-el="fillS" x="118" y="211" width="32" height="34" fill="#E4645C" opacity=".82"/>
+          <ellipse data-el="mnsS" cx="134" cy="211" rx="15.4" ry="2.4" fill="#FF9B92" opacity=".9"/>
         </g>
-        <circle cx="134" cy="234" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
-        <text class="orbLbl" x="134" y="258">SAÚDE</text>
+        <circle cx="134" cy="230" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
+        <text class="orbLbl" x="134" y="257">saúde</text>
       </g>
       <g>
-        <circle data-el="ancE" cx="180" cy="234" r="16.6" fill="#0B1017" stroke="rgba(240,194,75,.42)" stroke-width="1.2"/>
+        <circle data-el="ancE" cx="180" cy="230" r="16.6" fill="#0B1017" stroke="rgba(240,194,75,.42)" stroke-width="1.2"/>
         <g clip-path="url(#rl-clipE)">
-          <rect data-el="fillE" x="164" y="221" width="32" height="28" fill="#F0C24B" opacity=".82"/>
-          <ellipse data-el="mnsE" cx="180" cy="221" rx="15.4" ry="2.4" fill="#FFE29A" opacity=".9"/>
+          <rect data-el="fillE" x="164" y="217" width="32" height="28" fill="#F0C24B" opacity=".82"/>
+          <ellipse data-el="mnsE" cx="180" cy="217" rx="15.4" ry="2.4" fill="#FFE29A" opacity=".9"/>
         </g>
-        <circle cx="180" cy="234" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
-        <text class="orbLbl" x="180" y="258">ENERGIA</text>
+        <circle cx="180" cy="230" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
+        <text class="orbLbl" x="180" y="257">energia</text>
       </g>
       <g>
-        <circle data-el="ancA" cx="226" cy="234" r="16.6" fill="#0B1017" stroke="rgba(127,208,166,.42)" stroke-width="1.2"/>
+        <circle data-el="ancA" cx="226" cy="230" r="16.6" fill="#0B1017" stroke="rgba(127,208,166,.42)" stroke-width="1.2"/>
         <g clip-path="url(#rl-clipA)">
-          <rect data-el="fillA" x="210" y="217" width="32" height="32" fill="#7FD0A6" opacity=".82"/>
-          <ellipse data-el="mnsA" cx="226" cy="217" rx="15.4" ry="2.4" fill="#B9F0D5" opacity=".9"/>
+          <rect data-el="fillA" x="210" y="213" width="32" height="32" fill="#7FD0A6" opacity=".82"/>
+          <ellipse data-el="mnsA" cx="226" cy="213" rx="15.4" ry="2.4" fill="#B9F0D5" opacity=".9"/>
         </g>
-        <circle cx="226" cy="234" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
-        <text class="orbLbl" x="226" y="258">ÂNIMO</text>
+        <circle cx="226" cy="230" r="16.6" fill="none" stroke="rgba(255,255,255,.10)"/>
+        <text class="orbLbl" x="226" y="257">ânimo</text>
       </g>
 
       <path class="fissura" data-el="fis1" d=""/>
@@ -3497,7 +3609,7 @@ LW.skins.relogio = {
         <path data-el="capa" d="M12,30 h32" stroke="#E3A85C" stroke-width="1.6"/>
         <path d="M28,30 v11" stroke="rgba(0,0,0,.45)" stroke-width="1"/>
       </svg>
-      <div class="rot">habilidade</div>
+      <div class="rot">o que sei</div>
     </div>
     <div class="coisa">
       <svg viewBox="0 0 56 46" aria-hidden="true"><g data-el="lacos"></g></svg>
@@ -3536,22 +3648,34 @@ LW.skins.relogio = {
       pilha: q('pilha'), paginas: q('paginas'), capa: q('capa'), lacos: q('lacos'),
       outro: q('outro'), haloOutro: q('haloOutro'), mao: q('mao'),
       orb: {
-        health: { fill: q('fillS'), mns: q('mnsS'), anc: q('ancS'), cx: 134, cy: 234, r: 15.4, cor: '#FF8078' },
-        energy: { fill: q('fillE'), mns: q('mnsE'), anc: q('ancE'), cx: 180, cy: 234, r: 15.4, cor: '#FFD671' },
-        happiness: { fill: q('fillA'), mns: q('mnsA'), anc: q('ancA'), cx: 226, cy: 234, r: 15.4, cor: '#9BE8C4' },
+        health: { fill: q('fillS'), mns: q('mnsS'), anc: q('ancS'), cx: 134, cy: 230, r: 15.4, cor: '#FF8078' },
+        energy: { fill: q('fillE'), mns: q('mnsE'), anc: q('ancE'), cx: 180, cy: 230, r: 15.4, cor: '#FFD671' },
+        happiness: { fill: q('fillA'), mns: q('mnsA'), anc: q('ancA'), cx: 226, cy: 230, r: 15.4, cor: '#9BE8C4' },
       },
     };
     this.hist = [];
     this.frio = false;
     this.ultima = 'Escolha uma ficha. Ela vira o dia de hoje no anel.';
 
-    /* a frase, gravada no aro — o tamanho cede ao comprimento dela */
+    /* a frase, gravada no aro. O aro tem 210° de volta; a letra começa grande e
+       só encolhe o quanto a frase pedir — nunca abaixo do que se lê no celular.
+       Medimos a letra de verdade quando dá; senão, estimamos pelo tamanho da frase. */
     var txt = ctx.frase.replace(/\s*\.\s*$/, '');
-    var arco = 152 * (144 * Math.PI / 180);          // comprimento útil do arco de cima
-    var fs = lim((arco * 0.95 / txt.length - 1.0) / 0.63, 7.8, 12.4);
-    e.frase.setAttribute('style', 'font-size:' + fs.toFixed(2) + 'px;letter-spacing:' +
-      (fs > 11 ? 1.4 : 0.9) + 'px');
     e.frase.firstChild.textContent = txt;
+    var ARCO = 152 * (204 * Math.PI / 180) * 0.97;   // volta útil do aro de cima
+    var fs = 17, medir = function () {
+      var L = 0;
+      try { if (e.frase.getComputedTextLength) L = e.frase.getComputedTextLength(); } catch (_) { L = 0; }
+      return L > 0 ? L : txt.length * (fs * 0.55 + 0.8);
+    };
+    for (var v = 0; v < 3; v++) {
+      e.frase.setAttribute('style', 'font-size:' + fs.toFixed(2) + 'px');
+      var largura = medir();
+      if (largura <= ARCO) break;
+      fs = lim(fs * ARCO / largura, 12.4, 17);
+    }
+    e.frase.setAttribute('style', 'font-size:' + fs.toFixed(2) + 'px;letter-spacing:' +
+      (fs > 15 ? 0.8 : 0.3) + 'px');
 
     /* marcas de cinco em cinco dias, fora do anel de ladrilhos */
     var ts = '';
@@ -3597,7 +3721,7 @@ LW.skins.relogio = {
     e.lacos.innerHTML = la;
 
     /* as dez fichas, em dois leques */
-    var ROT = [-5.5, -2.75, 0, 2.75, 5.5], DY = [8, 2, 0, 2, 8];
+    var ROT = [-3.5, -1.75, 0, 1.75, 3.5], DY = [5, 1.5, 0, 1.5, 5];
     var filas = raiz.querySelectorAll('.fila');
     for (var f = 0; f < 2; f++) {
       var buf = '';
@@ -3609,7 +3733,7 @@ LW.skins.relogio = {
           '<span class="capa"></span>' +
           '<svg class="gl" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.85" ' +
           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + GL[acao] + '</svg>' +
-          '<span class="nm">' + CURTO[acao] + '</span>' +
+          '<span class="nm">' + (HIFEN[acao] || CURTO[acao]) + '</span>' +
           (acao === 'save' || acao === 'withdraw' ? '<span class="oito">8</span>' : '') +
           ESTRELA + '</div>';
       }
@@ -3878,7 +4002,8 @@ LW.skins.rua = {
 
   css: `
   .sk-rua { position: fixed; inset: 0; display: flex; flex-direction: column;
-    background: #17131e; color: #f2e8d8; overflow: hidden;
+    background: linear-gradient(#2b4a7a 0%, #2b4a7a 26%, #17131e 34%, #17131e 100%);
+    color: #f2e8d8; overflow: hidden;
     font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent; user-select: none; }
   .sk-rua .cena { position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
@@ -4036,7 +4161,7 @@ LW.skins.rua = {
 
   html: `
   <div class="cena">
-  <svg viewBox="0 0 375 812" preserveAspectRatio="xMidYMid slice" aria-label="A rua onde você vive">
+  <svg viewBox="0 0 375 812" preserveAspectRatio="xMidYMid meet" aria-label="A rua onde você vive">
   <defs>
     <linearGradient id="rua-ceu" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2c4f7d"/><stop offset=".34" stop-color="#5b87b0"/>
@@ -4152,7 +4277,7 @@ LW.skins.rua = {
 
   <!-- ---------- 0 · sua casa (descansar) ---------- -->
   <g class="lugar" data-acao="rest"><g transform="translate(0,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <path d="M1 308 L31 276 L61 308 Z" fill="#6d3c36"/>
     <rect x="7" y="306" width="48" height="146" fill="#b0654f"/>
@@ -4181,7 +4306,7 @@ LW.skins.rua = {
 
   <!-- ---------- 1 · dona Ivone (ajudar) ---------- -->
   <g class="lugar" data-acao="help"><g transform="translate(62.5,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <path d="M3 314 L31 288 L59 314 Z" fill="#3b5147"/>
     <rect x="8" y="312" width="46" height="140" fill="#5f7d6e"/>
@@ -4217,7 +4342,7 @@ LW.skins.rua = {
 
   <!-- ---------- 2 · o mercado (alimentar-se) ---------- -->
   <g class="lugar" data-acao="eat"><g transform="translate(125,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <rect x="5" y="300" width="52" height="152" fill="#c08a3f"/>
     <rect x="2" y="291" width="58" height="10" rx="2.5" fill="#8f6329"/>
@@ -4259,7 +4384,7 @@ LW.skins.rua = {
 
   <!-- ---------- 3 · o serviço (trabalhar) ---------- -->
   <g class="lugar" data-acao="work"><g transform="translate(187.5,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <path d="M0 300 L31 280 L62 300 Z" fill="#33495a"/>
     <rect x="4" y="298" width="54" height="154" fill="#46606f"/>
@@ -4302,7 +4427,7 @@ LW.skins.rua = {
     <g transform="translate(31,0)"><g class="pendurada">
       <path d="M-16 376 v-5 M16 376 v-5" stroke="#2c414f" stroke-width="1.4"/>
       <rect x="-23" y="375" width="46" height="14" rx="2" fill="#eadfc4" stroke="#2c414f" stroke-width="1.4"/>
-      <text x="0" y="385.5" text-anchor="middle" font-size="8" letter-spacing=".7"
+      <text x="0" y="385.5" text-anchor="middle" font-size="10.8" letter-spacing=".7"
             fill="#33495a" font-weight="700">O SERVIÇO</text>
     </g></g>
     <text class="preco giz" x="31" y="467" text-anchor="middle" font-size="9.5"
@@ -4313,7 +4438,7 @@ LW.skins.rua = {
 
   <!-- ---------- 4 · o curso (estudar) ---------- -->
   <g class="lugar" data-acao="study"><g transform="translate(250,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <path d="M3 316 L31 292 L59 316 Z" fill="#5a3852"/>
     <rect x="7" y="314" width="48" height="138" fill="#7e5273"/>
@@ -4353,7 +4478,7 @@ LW.skins.rua = {
 
   <!-- ---------- 5 · o bar (uma diversão) ---------- -->
   <g class="lugar" data-acao="leisure_a"><g transform="translate(312.5,0)">
-    <rect class="hit" x="0" y="262" width="62.5" height="208" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="0.0" y="262" width="70" height="208" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="1.5" y="264" width="59.5" height="204" rx="5" fill="#fff"/>
     <rect x="5" y="304" width="52" height="148" fill="#9c4a48"/>
     <rect x="2" y="295" width="58" height="10" rx="2.5" fill="#743331"/>
@@ -4415,7 +4540,7 @@ LW.skins.rua = {
 
   <!-- ---------- 6 · a praça (outra diversão) ---------- -->
   <g class="lugar" data-acao="leisure_b">
-    <rect class="hit" x="4" y="518" width="112" height="148" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="25.0" y="518" width="70" height="148" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="4" y="518" width="112" height="148" rx="7" fill="#fff"/>
     <ellipse cx="42" cy="652" rx="30" ry="7" fill="#2a2130" opacity=".3"/>
     <g>
@@ -4456,7 +4581,7 @@ LW.skins.rua = {
 
   <!-- ---------- 7 · a esquina com gente (socializar) ---------- -->
   <g class="lugar" data-acao="socialize">
-    <rect class="hit" x="122" y="518" width="106" height="148" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="140.0" y="518" width="70" height="148" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="122" y="518" width="106" height="148" rx="7" fill="#fff"/>
     <ellipse cx="176" cy="654" rx="46" ry="8" fill="#2a2130" opacity=".3"/>
     <g transform="translate(140,594)"><g data-el="fig1" class="figurinha">
@@ -4504,7 +4629,7 @@ LW.skins.rua = {
 
   <!-- ---------- 8 · guardar ---------- -->
   <g class="lugar" data-acao="save">
-    <rect class="hit" x="242" y="526" width="58" height="126" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="236.0" y="526" width="70" height="126" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="242" y="528" width="58" height="122" rx="5" fill="#fff"/>
     <rect x="246" y="544" width="50" height="80" rx="4" fill="#3d3a33"/>
     <rect x="252" y="552" width="38" height="22" rx="2" fill="#8fd0c0" opacity=".5"/>
@@ -4522,7 +4647,7 @@ LW.skins.rua = {
 
   <!-- ---------- 9 · pegar ---------- -->
   <g class="lugar" data-acao="withdraw">
-    <rect class="hit" x="310" y="526" width="58" height="126" fill="transparent" pointer-events="all"/>
+    <rect class="hit" x="304.0" y="526" width="70" height="126" fill="transparent" pointer-events="all"/>
     <rect class="destaque" x="310" y="528" width="58" height="122" rx="5" fill="#fff"/>
     <rect x="314" y="544" width="50" height="80" rx="4" fill="#3d3a33"/>
     <rect x="320" y="552" width="38" height="22" rx="2" fill="#8fd0c0" opacity=".5"/>
@@ -4629,7 +4754,7 @@ LW.skins.rua = {
   <g pointer-events="none">
     <rect x="6" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
     <rect x="365" y="180" width="4" height="292" fill="#2b2233" opacity=".82"/>
-    <text x="187.5" y="192" text-anchor="middle" font-size="7.5" letter-spacing="2.6"
+    <text x="187.5" y="192" text-anchor="middle" font-size="10.1" letter-spacing="2.6"
           fill="#ffe9c4" opacity=".85" font-weight="700">PEDIRAM A VOCÊ</text>
     <g class="faixa">
       <path d="M2 198 L20 202" stroke="#c9b28a" stroke-width="1.4"/>
