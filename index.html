@@ -667,21 +667,21 @@ const RAIL_ICONES = {
   health: '<path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/>',
   energy: '<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>',
   happiness: '<circle cx="12" cy="12" r="9"/><path d="M8 14c1.3 1.6 6.7 1.6 8 0"/><circle cx="9" cy="10" r=".9"/><circle cx="15" cy="10" r=".9"/>',
-  cash: '<rect x="3" y="7" width="18" height="11" rx="2"/><circle cx="12" cy="12.5" r="2.6"/>',
-  savings: '<path d="M5 12a6 5 0 0112 0v5H5z"/><path d="M9 7V5h4v2"/>',
-  skill: '<path d="M4 5h7v15H4z"/><path d="M13 5h7v15h-7z"/>',
-  social: '<circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="11" r="2.3"/><path d="M3 20c0-3.2 2.8-5 6-5s6 1.8 6 5"/>',
-  other_welfare: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+  cash: '<rect x="2.5" y="6.5" width="19" height="11" rx="1.6"/><circle cx="12" cy="12" r="2.7"/><path d="M5.6 9.4v5.2M18.4 9.4v5.2"/>',
+  savings: '<path d="M3.2 12.4a6.2 5.2 0 016.2-5.2h3.4a6.2 5.2 0 016.2 5.2v1.7a3 3 0 01-3 3h-.5l-.9 2h-2.3l-.5-2h-2.6l-.5 2H6.4l-.9-2a3 3 0 01-2.3-3z"/><path d="M9.6 10.6h3.2"/><circle cx="17" cy="12" r=".8" fill="currentColor"/>',
+  skill: '<path d="M12 6.4C10.4 5 8 4.6 4 4.8v12.6c4-.2 6.4.2 8 1.6 1.6-1.4 4-1.8 8-1.6V4.8c-4-.2-6.4.2-8 1.6z"/><path d="M12 6.4v12.6"/>',
+  social: '<circle cx="8.4" cy="8.6" r="2.9"/><circle cx="16.4" cy="10.4" r="2.2"/><path d="M2.8 19.6c0-3.1 2.5-5 5.6-5s5.6 1.9 5.6 5"/><path d="M15 15c2.6.2 4.4 1.9 4.4 4.6"/>',
+  other_welfare: '<circle cx="12" cy="14.6" r="3"/><path d="M6 21.4c0-3 2.7-4.6 6-4.6s6 1.6 6 4.6"/><path d="M12 8.2S8.6 6.4 8.6 4.4A1.9 1.9 0 0112 3.3a1.9 1.9 0 013.4 1.1c0 2-3.4 3.8-3.4 3.8z"/>',
 };
 const RAIL_CURTO = {
-  health: 'saúde', energy: 'energia', happiness: 'ânimo', cash: 'bolso',
-  savings: 'guardado', skill: 'prática', social: 'gente', other_welfare: 'ela/ele',
+  health: 'saúde', energy: 'energia', happiness: 'ânimo', cash: 'dinheiro',
+  savings: 'poupado', skill: 'habilidade', social: 'amizades', other_welfare: 'outra pessoa',
 };
 
 const RAIL_CSS = `
 /* a cena recua: o painel ocupa faixa propria em vez de cobrir a arte */
-#scGame[class*="sk-"] { right: 56px; }
-#lwRail { position: fixed; top: 0; right: 0; bottom: 0; width: 56px; z-index: 40;
+#scGame[class*="sk-"] { right: 64px; }
+#lwRail { position: fixed; top: 0; right: 0; bottom: 0; width: 64px; z-index: 40;
   display: flex; flex-direction: column; justify-content: center; gap: 2px;
   padding: 8px 5px calc(8px + env(safe-area-inset-bottom)) 5px;
   background: #0d0a14; border-left: 1px solid rgba(255,255,255,.07);
@@ -691,8 +691,9 @@ const RAIL_CSS = `
 #lwRail svg { width: 17px; height: 17px; display: block; }
 #lwRail .lwq { font-size: 12.5px; font-weight: 700; color: #f0ecf6; line-height: 1;
   font-variant-numeric: tabular-nums; }
-#lwRail .lwr { font-size: 7.5px; letter-spacing: .04em; color: #9990ab; line-height: 1; }
-#lwRail .lwb { width: 30px; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.14);
+#lwRail .lwr { font-size: 8px; letter-spacing: .01em; color: #a79dba; line-height: 1.12;
+  text-align: center; max-width: 60px; }
+#lwRail .lwb { width: 34px; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.14);
   overflow: hidden; margin-top: 1px; }
 #lwRail .lwb i { display: block; height: 100%; border-radius: 2px; transition: width .45s cubic-bezier(.2,.8,.3,1); }
 #lwRail .lwv.baixo .lwq { color: #ff6f66; }
@@ -706,8 +707,7 @@ const RAIL_CSS = `
 #lwRail .lwv.pulsa { animation: lwPulsa .5s ease-out; }
 @keyframes lwPulsa { 0%,100% { transform: scale(1) } 40% { transform: scale(1.13) } }
 /* misto: sem rótulo. cênico: sem rótulo nem barra — o valor exato continua lá. */
-#lwRail.lw-misto .lwr, #lwRail.lw-diegetico .lwr, #lwRail.lw-diegetico .lwb { display: none; }
-#lwRail.lw-diegetico .lwq { font-size: 11.5px; color: #cdc5db; }
+#lwRail.lw-diegetico .lwb { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #lwRail .lwd.mostra, #lwRail .lwv.pulsa { animation: none; }
   #lwRail .lwb i { transition: none; }
