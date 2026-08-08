@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://marcosnocetti.github.io/lifeworld/sitemap.xml
