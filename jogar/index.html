@@ -155,6 +155,13 @@
     table.acoes-brief tr { display: block; border-bottom: 1px solid var(--line); padding: 7px 0; }
   }
 
+  /* posicao no ranking (so pontuacao) */
+  .rankpos { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 14px 16px; margin-top: 10px; font-size: 15px; }
+  .rankpos b { color: var(--accent); font-size: 19px; }
+  .rankpos .melhor { display: block; margin-top: 4px; font-size: 13px; color: var(--muted);
+    font-variant-numeric: tabular-nums; }
+
 </style>
 
 <div class="wrap">
@@ -297,6 +304,18 @@
       coisas diferentes. Veja como a sua vida se sai em cada uma delas:</p>
       <div class="leitura-res" id="endLeitura"></div>
       <table class="lt" id="endTabela"></table>
+
+      <div class="kicker" style="margin-top: 22px;">Seu lugar entre as vidas</div>
+      <p style="font-size: 13.5px; margin-top: 4px;">Só a pontuação entra na comparação — as decisões de cada pessoa
+      são segredo do estudo.</p>
+      <div class="rankpos" id="endRankPos">calculando…</div>
+
+      <div class="kicker" style="margin-top: 22px;">Chame alguém para viver isso</div>
+      <p style="font-size: 13.5px; margin-top: 4px;" id="endShareTexto"></p>
+      <div class="btnrow">
+        <button class="cta" id="bDesafiar">Desafiar um amigo</button>
+        <button class="cta ghost" id="bCompartilhar">Compartilhar</button>
+      </div>
 
       <div class="kicker" style="margin-top: 22px;">Por que existiam versões diferentes</div>
       <p style="font-size: 13.5px; margin-top: 4px;">Você jogou uma de cinco versões visuais, sorteada
@@ -1095,6 +1114,7 @@ async function copiar() {
 function finalizar() {
   const fam = S.familia;
   const [uGold, vGold] = evaluateSpec(GOLDS[fam], S.traj, HORIZON);
+  S.notaOuro = uGold;
   const morreu = !alive(S.estado);
   const f = S.estado;
 
@@ -1140,6 +1160,71 @@ function finalizar() {
 
   troca('scGame', 'scEnd');
   enviarAuto();
+  carregarRanking();
+  montarDesafio();
+}
+
+/* ---------- ranking: so pontuacao, nunca decisoes ---------- */
+async function carregarRanking() {
+  const alvo = $('endRankPos');
+  if (!alvo) return;
+  if (!CONFIG.endpoint && !gsDisponivel()) {
+    alvo.textContent = 'A comparação entre vidas está disponível na versão online do jogo.';
+    return;
+  }
+  try {
+    const url = `${CONFIG.endpoint}?action=percentil&familia=${S.familia}&regime=${S.regime}&nota=${S.notaOuro}`;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(t);
+    const d = await r.json();
+    if (!d.ok) throw new Error('resposta invalida');
+    S.percentilInfo = d;
+    if (d.n < 3) {
+      alvo.innerHTML = `Você está entre as <b>${d.n + 1}ª</b> primeiras vidas vividas neste mundo — pioneiro.`;
+    } else {
+      const pct = Math.round(100 * d.abaixo / d.n);
+      alvo.innerHTML = `Sua pontuação superou <b>${pct}%</b> das ${d.n} vidas já vividas neste mundo.
+        <span class="melhor">melhor pontuação neste mundo até agora: ${fmt(d.melhor, 3)}</span>`;
+      S.pctSupera = pct;
+    }
+    montarDesafio();   // o texto do convite melhora com o percentil
+  } catch (e) {
+    alvo.textContent = 'Comparação indisponível agora — sua participação já está registrada.';
+  }
+}
+
+/* ---------- desafio: convite pronto para o WhatsApp ---------- */
+function textoDesafio() {
+  const sentido = (S.notasLeitura && S.notasLeitura[0]) ? S.notasLeitura[0].nome : null;
+  const partes = ['Vivi 50 decisões no LifeWorld'];
+  if (sentido) partes.push(`e a minha vida foi a do “${sentido}”`);
+  if (typeof S.pctSupera === 'number') partes.push(`— superei ${S.pctSupera}% das vidas neste mundo`);
+  partes.push('. Uma IA viveu as mesmas decisões. Consegue fazer melhor?');
+  return partes.join(' ').replace(' .', '.') + ' https://marcosnocetti.github.io/lifeworld/';
+}
+function montarDesafio() {
+  const txt = $('endShareTexto');
+  if (txt) txt.textContent = 'O convite não conta suas decisões — só o desafio.';
+  const bd = $('bDesafiar'), bc = $('bCompartilhar');
+  if (bd && !bd.dataset.ligado) {
+    bd.dataset.ligado = '1';
+    bd.addEventListener('click', () => {
+      window.open('https://wa.me/?text=' + encodeURIComponent(textoDesafio()), '_blank');
+    });
+  }
+  if (bc && !bc.dataset.ligado) {
+    bc.dataset.ligado = '1';
+    bc.addEventListener('click', async () => {
+      const dados = { title: 'LifeWorld', text: textoDesafio() };
+      try {
+        if (navigator.share) { await navigator.share(dados); return; }
+        await navigator.clipboard.writeText(textoDesafio());
+        bc.textContent = '✓ Convite copiado';
+      } catch (e) { /* usuario cancelou */ }
+    });
+  }
 }
 
 
