@@ -242,6 +242,9 @@
 
       <div class="kicker" style="margin-top: 20px;">O que existe no mundo</div>
       <div class="defs">
+        <div class="def"><b>O dia sempre cobra</b> <span>Todo passo desconta o custo de vida em dinheiro
+        (1,0 no mundo estável; mais em mundos difíceis), 2 de energia e 0,5 de ânimo — antes de
+        qualquer ação, inclusive descansar.</span></div>
         <div class="def"><b>Saúde</b> <span>0 a 100. Se chegar a zero, o episódio acaba ali.</span></div>
         <div class="def"><b>Energia</b> <span>0 a 100. Abaixo de 15, você perde saúde a cada passo.</span></div>
         <div class="def"><b>Ânimo</b> <span>0 a 100. Cai um pouco a cada passo, por si só.</span></div>
@@ -427,7 +430,7 @@ const REGIMES = {
 const ACOES_PT = {
   work:      { nome: "Trabalhar",      desc: "ganha dinheiro conforme sua habilidade; custa energia, ânimo e um pouco de saúde" },
   study:     { nome: "Estudar",        desc: "custa 2 e energia; aumenta habilidade — trabalhos futuros rendem mais" },
-  rest:      { nome: "Descansar",      desc: "recupera muita energia, um pouco de saúde e ânimo; não custa nada" },
+  rest:      { nome: "Descansar",      desc: "recupera muita energia, um pouco de saúde e ânimo; a ação é de graça — só corre o custo do dia" },
   eat:       { nome: "Comer",          desc: "custa 4; recupera energia, saúde e ânimo" },
   leisure_a: { nome: "Lazer A",        desc: "custa 3 e energia; o ânimo que dá depende de você gostar dessa atividade" },
   leisure_b: { nome: "Lazer B",        desc: "custa 3 e energia; o ânimo que dá depende de você gostar dessa atividade" },
@@ -443,7 +446,7 @@ const ACOES_PT = {
 const ACOES_EFEITO = {
   work:      { ganha: "dinheiro (mais se tiver prática)", perde: "energia, ânimo e um pouco de saúde" },
   study:     { ganha: "habilidade — trabalhar rende mais depois", perde: "2 de dinheiro e energia" },
-  rest:      { ganha: "energia, saúde e ânimo", perde: "nada" },
+  rest:      { ganha: "energia, saúde e ânimo", perde: "nada além do custo do dia" },
   eat:       { ganha: "energia, saúde e ânimo", perde: "4 de dinheiro" },
   leisure_a: { ganha: "ânimo (quanto, depende de você gostar)", perde: "3 de dinheiro e energia" },
   leisure_b: { ganha: "ânimo (quanto, depende de você gostar)", perde: "3 de dinheiro e energia" },
@@ -739,11 +742,12 @@ function jogar(acao) {
   atualizarDisponibilidade(S.ctx.raiz);
 }
 
-/* Previsao exata do passo, sem revelar surpresa: crise desligada (crisisAt -1)
-   e preferencia como desconhecida, senao a ficha entregaria qual lazer voce
-   gosta — que o desenho quer manter oculto.                                 */
+/* Previsao exata do passo. Preferencia sempre 'desconhecida' (a ficha nao
+   pode entregar qual lazer voce gosta). O crisisAt e o REAL: com -1, o regime
+   de crise mostrava os custos pos-crise desde o passo 1 (economy usa
+   t >= crisisAt) — numeros errados, achados por relato de jogador.          */
 function preverAcao(acao) {
-  const r = stepWorld({ ...S.estado }, acao, S.regime, 'desconhecida', -1);
+  const r = stepWorld({ ...S.estado }, acao, S.regime, 'desconhecida', CRISIS_AT);
   const d = {};
   for (const v of VITAIS) {
     const x = r.state[v.k] - S.estado[v.k];
@@ -768,9 +772,11 @@ function mostrarFicha(acao, el) {
     }).join('');
   }
 
+  const custoDia = economy(S.regime, S.estado.t, CRISIS_AT)[0];
   S.ficha.innerHTML = `<div class="nom">${ACOES_PT[acao].nome}</div>
     <div class="par g"><b>ganha</b><span>${ef.ganha || '—'}</span></div>
     <div class="par p"><b>custa</b><span>${ef.perde || '—'}</span></div>
+    <div class="par d"><b>o dia</b><span>todo dia desconta ${fmt(custoDia)} de dinheiro, 2 de energia e 0,5 de ânimo — já somado nos números abaixo</span></div>
     ${numeros ? `<div class="num">${numeros}</div>` : ''}
     ${bloqueado ? `<div class="aviso">Hoje não dá: ${REQ_TXT[acao]}.</div>` : ''}`;
   S.ficha.classList.add('on');
@@ -845,6 +851,8 @@ const RAIL_CSS = `
 #lwFicha .par { display: flex; gap: 10px; margin-top: 5px; font-size: 12.5px; line-height: 1.3; }
 #lwFicha .par b { flex: 0 0 auto; font-weight: 700; }
 #lwFicha .g b { color: #46d39a; } #lwFicha .p b { color: #ff8f86; }
+#lwFicha .d b { color: #c9a227; }
+#lwFicha .d span { color: #a79dba; }
 #lwFicha .par span { color: #c6bdd6; }
 #lwFicha .num { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px;
   font-size: 12px; font-variant-numeric: tabular-nums; color: #a79dba; }
